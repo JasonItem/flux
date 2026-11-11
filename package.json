@@ -1,0 +1,53 @@
+{
+  "name": "studio",
+  "version": "0.1.0",
+  "description": "Flux — AI media studio for Douyin creators: track research, sample breakdown, and account insights.",
+  "productName": "Flux",
+  "author": "Flux contributors",
+  "license": "MIT",
+  "homepage": "https://github.com/JasonItem/flux",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JasonItem/flux.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JasonItem/flux/issues"
+  },
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "rebuild:native": "npx @electron/rebuild --force --only better-sqlite3",
+    "dist": "npm run build && npm run rebuild:native && electron-builder --config.npmRebuild=false",
+    "dist:win": "npm run build && npm run rebuild:native && electron-builder --win --config.npmRebuild=false",
+    "dist:mac": "npm run build && npm run rebuild:native && electron-builder --mac --config.npmRebuild=false"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@lobehub/charts": "^6.0.1",
+    "@lobehub/fluent-emoji": "5.0.1",
+    "@lobehub/icons": "6.15.0",
+    "@lobehub/ui": "6.15.2",
+    "better-sqlite3": "13.0.3",
+    "lucide-react": "1.70.0",
+    "motion": "14.11.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0",
+    "electron-vite": "6.0.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.7"
+  }
+}

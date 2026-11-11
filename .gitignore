@@ -1,0 +1,32 @@
+node_modules
+out
+release
+dist
+*.log
+.DS_Store
+Thumbs.db
+
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.tsbuildinfo
+
+.cursor
+.vscode
+.idea
+*.local
+
+# local env / secrets
+.env
+.env.*
+!.env.example
+
+# packaging leftovers
+asar-extract
+probe.js
+probe2.js
+dist-win*.log
+dist-win*.txt
+rebuild-log.txt
+*.blockmap

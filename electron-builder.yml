@@ -1,0 +1,67 @@
+appId: app.studio.shell
+productName: "Flux"
+directories:
+  output: release
+  buildResources: build
+# Explicitly include compiled app (out/ is gitignored and otherwise skipped)
+files:
+  - package.json
+  - out/**/*
+  - node_modules/**/*
+  - '!**/.cursor/**'
+  - '!**/.vscode/**'
+  - '!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}'
+  - '!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}'
+  - '!**/node_modules/*.d.ts'
+  - '!**/node_modules/.bin'
+  - '!src/**'
+  - '!release/**'
+  - '!build/**'
+  - '!*.log'
+  - '!electron.vite.config.ts'
+  - '!{.gitignore,README.md}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{uploads,agent-tools}/**'
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+asar: true
+asarUnpack:
+  - node_modules/better-sqlite3/**/*
+linux:
+  target:
+    - AppImage
+  category: Utility
+  icon: resources/icon.png
+mac:
+  category: public.app-category.utilities
+  target:
+    - dmg
+  icon: resources/icon.png
+  # CI unsigned builds; set Apple signing secrets for distribution
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+win:
+  target:
+    - nsis
+  icon: resources/icon.png
+  executableName: Flux
+nsis:
+  # Assisted installer: choose install directory
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Flux
+  uninstallDisplayName: Flux
+  include: build/installer.nsh
+  warningsAsErrors: false
+  installerLanguages:
+    - zh_CN
+    - en_US
+  # User data wipe is opt-in on uninstall page (see build/installer.nsh)
+  deleteAppDataOnUninstall: false
+npmRebuild: false

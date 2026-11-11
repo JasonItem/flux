@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flux</title>
+    <script>
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('studio-theme')
+          var mode = stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'auto'
+          var dark = window.matchMedia('(prefers-color-scheme: dark)').matches
+          var root = document.documentElement
+          root.dataset.theme = mode === 'auto' ? (dark ? 'dark' : 'light') : mode
+          root.removeAttribute('data-primary-color')
+          root.removeAttribute('data-neutral-color')
+        } catch (error) {
+          /* keep the default light theme */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
