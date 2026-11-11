@@ -20,9 +20,9 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "rebuild:native": "npx @electron/rebuild --force --only better-sqlite3",
-    "dist": "npm run build && npm run rebuild:native && electron-builder --config.npmRebuild=false",
-    "dist:win": "npm run build && npm run rebuild:native && electron-builder --win --config.npmRebuild=false",
-    "dist:mac": "npm run build && npm run rebuild:native && electron-builder --mac --config.npmRebuild=false"
+    "dist": "npm run build && npm run rebuild:native && electron-builder --config.npmRebuild=false --publish never",
+    "dist:win": "npm run build && npm run rebuild:native && electron-builder --win --config.npmRebuild=false --publish never",
+    "dist:mac": "npm run build && npm run rebuild:native && electron-builder --mac --config.npmRebuild=false --publish never"
   },
   "engines": {
     "node": ">=22.12"
