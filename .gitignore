@@ -32,8 +32,9 @@ rebuild-log.txt
 *.blockmap
 
 # local ASR / media downloads (runtime lives under Electron userData)
-models/
-media/
+# Anchor to repo root so src/main/media source is not ignored.
+/models/
+/media/
 *.ggml
 ggml-*.bin
 whisper-bin*.zip
