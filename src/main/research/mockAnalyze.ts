@@ -3,6 +3,7 @@ import type {
   ResearchCommentItem,
   ResearchScriptSegment,
   ResearchStructureBlock,
+  ResearchTranscriptCue,
   ResearchVideoType,
 } from '../../shared/research'
 
@@ -28,6 +29,8 @@ export interface ResearchVideoDraft {
   structureBlocks: ResearchStructureBlock[]
   comments: ResearchCommentItem[]
   takeaways: string[]
+  fullTranscript?: string
+  transcriptCues?: ResearchTranscriptCue[]
 }
 
 /** 列表阶段样本：只保留元数据与评论，文案/结构等留到点进详情再拆 */
@@ -43,7 +46,7 @@ export function toPendingDraft(draft: ResearchVideoDraft): ResearchVideoDraft {
   }
 }
 
-const TYPE_CYCLE: ResearchVideoType[] = ['口播', '教程', '资讯', '带货', '探店', '剧情']
+const TYPE_CYCLE: ResearchVideoType[] = ['口播', '教程', '科普', '资讯', '带货', '探店', '剧情']
 
 /** 用户提供的可播直链（CDN 可能过期，过期后需换新） */
 const MOCK_PLAY_URL =

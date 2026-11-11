@@ -11,9 +11,11 @@ import {
   createAccountAnalysisRepository,
   type AccountAnalysisRepository,
 } from './accountAnalysis/repository'
+import { createJobRepository, type JobRepository } from './jobs/repository'
 import { createResearchRepository, type ResearchRepository } from './research/repository'
 import { createTopicRepository, type TopicRepository } from './topic/repository'
 import { createTrackRepository, type TrackRepository } from './track/repository'
+import { createWorkshopRepository, type WorkshopRepository } from './workshop/repository'
 
 interface MigrationRow {
   id: number
@@ -29,6 +31,8 @@ export interface AppDatabase {
   topic: TopicRepository
   research: ResearchRepository
   accountAnalysis: AccountAnalysisRepository
+  workshop: WorkshopRepository
+  jobs: JobRepository
   close: () => void
 }
 
@@ -83,6 +87,8 @@ export function openDatabase(filePath: string): AppDatabase {
     topic: createTopicRepository(db),
     research: createResearchRepository(db),
     accountAnalysis: createAccountAnalysisRepository(db),
+    workshop: createWorkshopRepository(db),
+    jobs: createJobRepository(db),
     close: () => {
       db.close()
     },

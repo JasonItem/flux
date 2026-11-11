@@ -25,9 +25,14 @@ files:
 extraResources:
   - from: resources/icon.png
     to: icon.png
+  # Optional: place prebuilt whisper-cli here to skip first-run engine download
+  # - from: resources/whisper
+  #   to: whisper
+  #   filter: ["**/*"]
 asar: true
 asarUnpack:
   - node_modules/better-sqlite3/**/*
+  - node_modules/ffmpeg-static/**/*
 linux:
   target:
     - AppImage
@@ -36,15 +41,21 @@ linux:
 mac:
   category: public.app-category.utilities
   target:
-    - dmg
+    - target: dmg
+      arch:
+        - x64
+        - arm64
   icon: resources/icon.png
   # CI unsigned builds; set Apple signing secrets for distribution
   identity: null
   hardenedRuntime: false
   gatekeeperAssess: false
 win:
+  # Electron 45+ 仅提供 64 位预编译包，不再支持 ia32
   target:
-    - nsis
+    - target: nsis
+      arch:
+        - x64
   icon: resources/icon.png
   executableName: Flux
 nsis:

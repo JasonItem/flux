@@ -145,11 +145,12 @@ export function parseDouyinUserProfile(
 }
 
 function pickPlayUrl(video: Record<string, unknown>): string | null {
+  // Prefer H264 for Chromium <video>; HEVC often fails to decode in-app.
   const direct =
-    firstUrlFromList(asRecord(video.play_addr)?.url_list) ??
     firstUrlFromList(asRecord(video.play_addr_h264)?.url_list) ??
-    firstUrlFromList(asRecord(video.play_addr_265)?.url_list) ??
+    firstUrlFromList(asRecord(video.play_addr)?.url_list) ??
     firstUrlFromList(asRecord(video.download_addr)?.url_list) ??
+    firstUrlFromList(asRecord(video.play_addr_265)?.url_list) ??
     asString(video.play_url) ??
     asString(video.download_url)
   if (direct) return direct
@@ -508,9 +509,15 @@ export interface DouyinCommentItem {
 function parseSearchVideoItem(raw: unknown): DouyinSearchVideoItem | null {
   const wrapper = asRecord(raw) ?? {}
   const data = asRecord(wrapper.data) ?? wrapper
+  // 兼容：搜索结果(aweme_info)、详情(aweme_detail)、以及直接就是 aweme 对象
   const aweme =
     asRecord(data.aweme_info) ??
     asRecord(wrapper.aweme_info) ??
+    asRecord(data.aweme_detail) ??
+    asRecord(wrapper.aweme_detail) ??
+    asRecord(data.aweme) ??
+    asRecord(wrapper.aweme) ??
+    (asString(data.aweme_id) || asString(wrapper.aweme_id) ? data : null) ??
     (asNumber(wrapper.type ?? data.type) === 1 ? data : null)
   if (!aweme) return null
 
@@ -554,21 +561,51 @@ export function parseDouyinSearchVideos(data: unknown): DouyinSearchVideoItem[] 
     .filter((entry): entry is DouyinSearchVideoItem => Boolean(entry))
 }
 
-/** 按 aweme_id 拉取单条视频（含封面与可播直链） */
+function pickAwemeFromPayload(data: unknown): Record<string, unknown> | null {
+  const root = asRecord(data) ?? {}
+  const nested = asRecord(root.data) ?? {}
+  return (
+    asRecord(root.aweme_detail) ??
+    asRecord(nested.aweme_detail) ??
+    asRecord(root.aweme) ??
+    asRecord(nested.aweme) ??
+    asRecord(root.aweme_info) ??
+    asRecord(nested.aweme_info) ??
+    (Array.isArray(root.aweme_list) ? asRecord(root.aweme_list[0]) : null) ??
+    (Array.isArray(nested.aweme_list) ? asRecord(nested.aweme_list[0]) : null) ??
+    (asString(root.aweme_id) ? root : null) ??
+    (asString(nested.aweme_id) ? nested : null)
+  )
+}
+
+/** 按 aweme_id 拉取单条视频（含封面、可播直链与作者信息） */
 export async function fetchOneVideo(
   options: TikHubClientOptions,
   awemeId: string,
-): Promise<DouyinVideoItem | null> {
+): Promise<DouyinSearchVideoItem | null> {
   const payload = await requestJson(options, '/api/v1/douyin/app/v3/fetch_one_video', {
     query: { aweme_id: awemeId },
   })
-  const root = asRecord(payload.data) ?? {}
-  const aweme =
-    asRecord(root.aweme_detail) ??
-    asRecord(root.aweme) ??
-    (asString(root.aweme_id) ? root : null)
+  const aweme = pickAwemeFromPayload(payload.data)
   if (!aweme) return null
-  return parseVideoItem(aweme)
+  return parseSearchVideoItem(aweme)
+}
+
+/** 按分享链接拉取单条视频（短链 / 精选页 modal 链接更稳） */
+export async function fetchOneVideoByShareUrl(
+  options: TikHubClientOptions,
+  shareUrl: string,
+): Promise<DouyinSearchVideoItem | null> {
+  const payload = await requestJson(
+    options,
+    '/api/v1/douyin/app/v3/fetch_one_video_by_share_url',
+    {
+      query: { share_url: shareUrl },
+    },
+  )
+  const aweme = pickAwemeFromPayload(payload.data)
+  if (!aweme) return null
+  return parseSearchVideoItem(aweme)
 }
 
 function pickSearchPageMeta(data: unknown): {
@@ -751,12 +788,49 @@ export async function fetchVideoComments(
   awemeId: string,
   count = 20,
 ): Promise<DouyinCommentItem[]> {
-  const payload = await requestJson(options, '/api/v1/douyin/web/fetch_video_comments', {
-    query: {
-      aweme_id: awemeId,
-      cursor: 0,
-      count: Math.min(count, 30),
-    },
-  })
-  return parseDouyinComments(payload.data)
+  const target = Math.max(1, Math.min(count, 500))
+  const collected: DouyinCommentItem[] = []
+  const seen = new Set<string>()
+  let cursor: number | string = 0
+  const maxPages = Math.min(25, Math.ceil(target / 20) + 2)
+
+  for (let page = 0; page < maxPages && collected.length < target; page += 1) {
+    const pageCount = Math.min(50, Math.max(20, target - collected.length))
+    const payload = await requestJson(options, '/api/v1/douyin/web/fetch_video_comments', {
+      query: {
+        aweme_id: awemeId,
+        cursor,
+        count: pageCount,
+      },
+    })
+    const batch = parseDouyinComments(payload.data)
+    let gained = 0
+    for (const item of batch) {
+      const key = item.cid || `${item.author}-${item.content.slice(0, 24)}`
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      collected.push(item)
+      gained += 1
+      if (collected.length >= target) break
+    }
+
+    const root = asRecord(payload.data) ?? {}
+    const nested = asRecord(root.data) ?? {}
+    const nextRaw = root.cursor ?? root.max_cursor ?? nested.cursor ?? nested.max_cursor ?? 0
+    const hasMoreRaw = root.has_more ?? root.hasMore ?? nested.has_more ?? nested.hasMore
+    const hasMore =
+      hasMoreRaw === true ||
+      hasMoreRaw === 1 ||
+      hasMoreRaw === '1' ||
+      String(hasMoreRaw).toLowerCase() === 'true'
+    const next =
+      typeof nextRaw === 'number' || typeof nextRaw === 'string' ? nextRaw : String(nextRaw)
+
+    if (gained === 0 || batch.length === 0) break
+    if (!hasMore) break
+    if (next === cursor) break
+    cursor = next
+  }
+
+  return collected
 }

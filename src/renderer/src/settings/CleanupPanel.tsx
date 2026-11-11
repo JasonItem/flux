@@ -160,6 +160,35 @@ export function CleanupPanel() {
         <section className="cleanup-section">
           <div className="cleanup-section-head">
             <div>
+              <Text weight={600}>本地视频缓存</Text>
+              <Text as="div" type="secondary">
+                按需下载的抖音 MP4（userData/media）。清理后播放与真实拆解会重新下载。
+              </Text>
+            </div>
+            <Text weight={600}>{formatBytes(status?.mediaCache.bytes ?? 0)}</Text>
+          </div>
+          <Text type="secondary">
+            {status?.mediaCache.fileCount ?? 0} 个文件
+            {status?.mediaCache.path ? ` · ${status.mediaCache.path}` : ''}
+          </Text>
+          <div className="cleanup-actions">
+            <Button
+              disabled={!status || status.mediaCache.bytes <= 0}
+              loading={busy === 'media'}
+              onClick={() => {
+                void runAction('media', '已清理本地视频缓存', () =>
+                  window.studio.cleanup.clearMediaCache(),
+                )
+              }}
+            >
+              清理视频缓存
+            </Button>
+          </div>
+        </section>
+
+        <section className="cleanup-section">
+          <div className="cleanup-section-head">
+            <div>
               <Text weight={600}>可重建分析缓存</Text>
               <Text as="div" type="secondary">
                 清空单视频分析/评论缓存、样本拆解正文、账号原始 JSON；下次打开会重新拉取或再跑模型。

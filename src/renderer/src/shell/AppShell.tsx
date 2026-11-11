@@ -11,19 +11,24 @@ import { ResearchPage } from '../pages/ResearchPage'
 import { ResearchVideoPage } from '../pages/ResearchVideoPage'
 import { TrackPage } from '../pages/TrackPage'
 import { WorkbenchPage } from '../pages/WorkbenchPage'
+import { WorkshopPage } from '../pages/WorkshopPage'
+import { WorkshopScriptPage } from '../pages/WorkshopScriptPage'
 import {
   isAccountVideoPath,
   isResearchVideoPath,
   isSettingsPath,
+  isWorkshopScriptPath,
   navigate,
   parseAccountVideoParams,
   parseResearchVideoId,
+  parseWorkshopScriptId,
   type MainHref,
 } from '../routes'
 import { SettingsView } from '../settings/SettingsView'
 import { useHashRoute } from '../hooks/useHashRoute'
 import { ThemeSwitch } from '../theme/ThemeRoot'
 import { mainNav, settingsNav } from './nav'
+import { JobsButton } from './JobsButton'
 import { SettingsButton } from './SettingsButton'
 import { TikHubBalance } from './TikHubBalance'
 import { WindowControls } from './WindowControls'
@@ -32,12 +37,15 @@ export function AppShell() {
   const path = useHashRoute()
   const inSettings = isSettingsPath(path)
   const researchVideoId = parseResearchVideoId(path)
+  const workshopScriptId = parseWorkshopScriptId(path)
   const accountVideo = parseAccountVideoParams(path)
   const navPath = isResearchVideoPath(path)
     ? '/research'
-    : isAccountVideoPath(path)
-      ? '/accounts'
-      : path
+    : isWorkshopScriptPath(path)
+      ? '/workshop'
+      : isAccountVideoPath(path)
+        ? '/accounts'
+        : path
   const currentMain = mainNav.find((item) => item.href === navPath)
   const currentSettings = settingsNav.find((item) => item.href === path)
   const lastMain = useRef<MainHref>('/workbench')
@@ -68,6 +76,16 @@ export function AppShell() {
       ]
     }
 
+    if (workshopScriptId) {
+      return [
+        {
+          label: '创作工坊',
+          onClick: () => navigate('/workshop'),
+        },
+        { label: '脚本详情' },
+      ]
+    }
+
     if (accountVideo) {
       return [
         {
@@ -90,26 +108,29 @@ export function AppShell() {
   return (
     <ConsoleShell
       brand={
-        <ConsoleBrand
-          href="#/workbench"
-          label="Flux"
-          logo={
-            <span className="brand-logo" aria-hidden>
-              <img alt="" className="brand-logo__mark" src={logoMarkUrl} />
-              <img
-                alt=""
-                className="brand-logo__wordmark brand-logo__wordmark--dark"
-                src={logoWordmarkDarkUrl}
-              />
-              <img
-                alt=""
-                className="brand-logo__wordmark brand-logo__wordmark--light"
-                src={logoWordmarkLightUrl}
-              />
-            </span>
-          }
-          title=""
-        />
+        <div className="sidebar-brand">
+          <ConsoleBrand
+            href="#/workbench"
+            label="Flux"
+            logo={
+              <span className="brand-logo" aria-hidden>
+                <img alt="" className="brand-logo__mark" src={logoMarkUrl} />
+                <img
+                  alt=""
+                  className="brand-logo__wordmark brand-logo__wordmark--dark"
+                  src={logoWordmarkDarkUrl}
+                />
+                <img
+                  alt=""
+                  className="brand-logo__wordmark brand-logo__wordmark--light"
+                  src={logoWordmarkLightUrl}
+                />
+              </span>
+            }
+            title=""
+          />
+          <ThemeSwitch />
+        </div>
       }
       breadcrumb={<Breadcrumb items={breadcrumbItems} label="当前位置" />}
       closeNavigationLabel="关闭导航"
@@ -119,7 +140,7 @@ export function AppShell() {
         <div className="sidebar-footer">
           <TikHubBalance />
           <div className="sidebar-footer__actions">
-            <ThemeSwitch />
+            <JobsButton />
             <SettingsButton active={inSettings} />
           </div>
         </div>
@@ -153,6 +174,10 @@ export function AppShell() {
         <ResearchVideoPage videoId={researchVideoId} />
       ) : path === '/research' ? (
         <ResearchPage />
+      ) : workshopScriptId ? (
+        <WorkshopScriptPage scriptId={workshopScriptId} />
+      ) : path === '/workshop' ? (
+        <WorkshopPage />
       ) : accountVideo ? (
         <AccountVideoPage accountId={accountVideo.accountId} awemeId={accountVideo.awemeId} />
       ) : path === '/accounts' ? (

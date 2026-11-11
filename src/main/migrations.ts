@@ -256,4 +256,96 @@ export const migrations: readonly Migration[] = [
         ON account_analyses(updated_at DESC);
     `,
   },
+  {
+    id: 10,
+    name: '0010_research_local_media_transcript',
+    sql: `
+      ALTER TABLE research_videos ADD COLUMN local_path TEXT;
+      ALTER TABLE research_videos ADD COLUMN media_status TEXT NOT NULL DEFAULT 'none';
+      ALTER TABLE research_videos ADD COLUMN dissect_status TEXT NOT NULL DEFAULT 'pending';
+      ALTER TABLE research_videos ADD COLUMN full_transcript TEXT NOT NULL DEFAULT '';
+      ALTER TABLE research_videos ADD COLUMN transcript_cues_json TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE research_videos ADD COLUMN dissect_error TEXT;
+    `,
+  },
+  {
+    id: 11,
+    name: '0011_studio_jobs',
+    sql: `
+      CREATE TABLE IF NOT EXISTS studio_jobs (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL,
+        phase TEXT NOT NULL DEFAULT 'queued',
+        message TEXT NOT NULL DEFAULT '',
+        percent REAL,
+        href TEXT NOT NULL,
+        dedupe_key TEXT NOT NULL,
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        finished_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_studio_jobs_status_created
+        ON studio_jobs(status, created_at ASC);
+      CREATE INDEX IF NOT EXISTS idx_studio_jobs_dedupe
+        ON studio_jobs(dedupe_key, status);
+    `,
+  },
+  {
+    id: 12,
+    name: '0012_research_videos_is_current',
+    sql: `
+      ALTER TABLE research_videos ADD COLUMN is_current INTEGER NOT NULL DEFAULT 1;
+      CREATE INDEX IF NOT EXISTS idx_research_videos_dissect_ready
+        ON research_videos(dissect_status, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_research_videos_topic_current
+        ON research_videos(topic_id, is_current);
+    `,
+  },
+  {
+    id: 13,
+    name: '0013_workshop_scripts',
+    sql: `
+      CREATE TABLE IF NOT EXISTS workshop_scripts (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        source_research_video_id TEXT,
+        source_aweme_id TEXT,
+        source_title TEXT,
+        topic_id TEXT,
+        topic_title TEXT NOT NULL DEFAULT '',
+        video_type TEXT NOT NULL DEFAULT '其他',
+        angle TEXT NOT NULL DEFAULT '',
+        duration_hint_sec INTEGER NOT NULL DEFAULT 0,
+        summary TEXT NOT NULL DEFAULT '',
+        segments_json TEXT NOT NULL DEFAULT '[]',
+        hooks_json TEXT NOT NULL DEFAULT '[]',
+        cta_options_json TEXT NOT NULL DEFAULT '[]',
+        comment_insights_json TEXT NOT NULL DEFAULT '[]',
+        full_script_text TEXT NOT NULL DEFAULT '',
+        error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_workshop_scripts_updated
+        ON workshop_scripts(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_workshop_scripts_source
+        ON workshop_scripts(source_research_video_id);
+    `,
+  },
+  {
+    id: 14,
+    name: '0014_research_videos_source',
+    sql: `
+      ALTER TABLE research_videos ADD COLUMN source TEXT NOT NULL DEFAULT 'sample';
+      CREATE INDEX IF NOT EXISTS idx_research_videos_source_updated
+        ON research_videos(source, updated_at DESC);
+    `,
+  },
 ]

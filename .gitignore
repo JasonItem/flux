@@ -30,3 +30,10 @@ dist-win*.log
 dist-win*.txt
 rebuild-log.txt
 *.blockmap
+
+# local ASR / media downloads (runtime lives under Electron userData)
+models/
+media/
+*.ggml
+ggml-*.bin
+whisper-bin*.zip

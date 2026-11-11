@@ -16,5 +16,13 @@ export function resolveMediaUrl(url: string | null | undefined): string | null {
     const index = Number(videoMatch[1]) % MOCK_VIDEOS.length
     return MOCK_VIDEOS[index] ?? null
   }
+  // 本地缓存：loopback HTTP 或 flux-media 自定义协议
+  if (
+    url.startsWith('flux-media://') ||
+    url.startsWith('http://127.0.0.1:') ||
+    url.startsWith('http://localhost:')
+  ) {
+    return url
+  }
   return url
 }

@@ -1,4 +1,4 @@
-import type { ResearchCommentItem } from '../../shared/research'
+import type { ResearchCommentItem, ResearchTranscriptCue } from '../../shared/research'
 
 export interface ResearchSampleInput {
   awemeId: string
@@ -15,4 +15,7 @@ export interface ResearchSampleInput {
   profileUrl: string
   matchHint?: number
   comments: ResearchCommentItem[]
+  /** ASR 原文案（真实口播） */
+  fullTranscript?: string
+  transcriptCues?: ResearchTranscriptCue[]
 }

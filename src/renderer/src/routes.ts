@@ -1,4 +1,4 @@
-export const mainHrefs = ['/workbench', '/track', '/research', '/accounts'] as const
+export const mainHrefs = ['/workbench', '/track', '/research', '/workshop', '/accounts'] as const
 
 export const settingsHrefs = [
   '/settings/accounts',
@@ -11,14 +11,24 @@ export const settingsHrefs = [
 export type MainHref = (typeof mainHrefs)[number]
 export type SettingsHref = (typeof settingsHrefs)[number]
 export type ResearchVideoPath = `/research/video/${string}`
+export type WorkshopScriptPath = `/workshop/${string}`
 export type AccountVideoPath = `/accounts/video/${string}/${string}`
-export type AppPath = MainHref | SettingsHref | ResearchVideoPath | AccountVideoPath
+export type AppPath =
+  | MainHref
+  | SettingsHref
+  | ResearchVideoPath
+  | WorkshopScriptPath
+  | AccountVideoPath
 
 const mainSet = new Set<string>(mainHrefs)
 const settingsSet = new Set<string>(settingsHrefs)
 
 export function isResearchVideoPath(path: string): path is ResearchVideoPath {
   return /^\/research\/video\/[^/]+$/.test(path)
+}
+
+export function isWorkshopScriptPath(path: string): path is WorkshopScriptPath {
+  return /^\/workshop\/[^/]+$/.test(path)
 }
 
 export function isAccountVideoPath(path: string): path is AccountVideoPath {
@@ -29,6 +39,10 @@ export function researchVideoHref(id: string): ResearchVideoPath {
   return `/research/video/${encodeURIComponent(id)}`
 }
 
+export function workshopScriptHref(id: string): WorkshopScriptPath {
+  return `/workshop/${encodeURIComponent(id)}`
+}
+
 export function accountVideoHref(accountId: string, awemeId: string): AccountVideoPath {
   return `/accounts/video/${encodeURIComponent(accountId)}/${encodeURIComponent(awemeId)}`
 }
@@ -36,6 +50,11 @@ export function accountVideoHref(accountId: string, awemeId: string): AccountVid
 export function parseResearchVideoId(path: AppPath): string | null {
   if (!isResearchVideoPath(path)) return null
   return decodeURIComponent(path.slice('/research/video/'.length))
+}
+
+export function parseWorkshopScriptId(path: AppPath): string | null {
+  if (!isWorkshopScriptPath(path)) return null
+  return decodeURIComponent(path.slice('/workshop/'.length))
 }
 
 export function parseAccountVideoParams(
@@ -57,6 +76,7 @@ export function normalizePath(hash: string): AppPath {
   if (path === '/topics' || path === '/lab') return '/research'
   if (path === '/' || path === '') return '/workbench'
   if (isResearchVideoPath(path)) return path
+  if (isWorkshopScriptPath(path)) return path
   if (isAccountVideoPath(path)) return path
   if (mainSet.has(path)) return path as MainHref
   if (settingsSet.has(path)) return path as SettingsHref

@@ -97,7 +97,7 @@ export function ThemeSwitch() {
           },
         },
       ]}
-      placement="topRight"
+      placement="bottomRight"
       triggerProps={{
         'aria-label': '主题',
         className: 'theme-menu-trigger',
@@ -105,6 +105,7 @@ export function ThemeSwitch() {
       }}
     >
       <ActionIcon
+        className="theme-menu-trigger"
         icon={modeIcon(value.mode)}
         size="small"
         title={`主题：${modeLabel(value.mode)}`}

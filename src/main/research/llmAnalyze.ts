@@ -19,6 +19,7 @@ const VIDEO_TYPES: ResearchVideoType[] = [
   '教程',
   '剧情',
   '资讯',
+  '科普',
   '其他',
 ]
 
@@ -56,21 +57,30 @@ function parseBlocks(raw: unknown, durationSec: number): ResearchStructureBlock[
       if (!title) return null
       const startSec = Math.max(0, asNumber(row.startSec, 0))
       const endSec = Math.max(startSec + 1, asNumber(row.endSec, Math.min(durationSec, startSec + 8)))
-      return {
+      const keyLines = asStringArray(row.keyLines, []).slice(0, 4)
+      const analysis = String(row.analysis ?? row.text ?? '').trim()
+      const block: ResearchStructureBlock = {
         startSec,
         endSec: Math.min(endSec, Math.max(durationSec, endSec)),
         title,
         purpose: String(row.purpose ?? '讲点').trim(),
-        editingStyle: String(row.editingStyle ?? row.editStyle ?? '').trim() || `${title}段：按目的匹配切点与字幕密度`,
+        editingStyle:
+          String(row.editingStyle ?? row.editStyle ?? '').trim() ||
+          `${title}段：按口播节奏与字幕密度推断切点`,
       }
+      if (analysis) block.analysis = analysis
+      if (keyLines.length > 0) block.keyLines = keyLines
+      return block
     })
     .filter((item): item is ResearchStructureBlock => Boolean(item))
-    .slice(0, 8)
+    .slice(0, 16)
 }
 
 function parseComments(raw: unknown, fallback: ResearchCommentItem[]): ResearchCommentItem[] {
-  if (!Array.isArray(raw) || raw.length === 0) return fallback.slice(0, 8)
-  return raw
+  // Prefer real TikHub comments — LLM often returns empty/fake rows
+  if (fallback.length > 0) return fallback.slice(0, 400)
+  if (!Array.isArray(raw) || raw.length === 0) return []
+  const parsed = raw
     .map((item) => {
       const row = asRecord(item)
       if (!row) return null
@@ -85,7 +95,7 @@ function parseComments(raw: unknown, fallback: ResearchCommentItem[]): ResearchC
             ? Number((replyCount / diggCount).toFixed(3))
             : 0
       const repliesRaw = Array.isArray(row.replies) ? row.replies : []
-      const replies = parseComments(repliesRaw, []).slice(0, 8)
+      const replies = parseComments(repliesRaw, []).slice(0, 12)
       return {
         id: String(row.id ?? content.slice(0, 12) + String(diggCount)),
         author: String(row.author ?? '用户').trim() || '用户',
@@ -100,7 +110,8 @@ function parseComments(raw: unknown, fallback: ResearchCommentItem[]): ResearchC
     })
     .filter((item): item is ResearchCommentItem => Boolean(item))
     .sort((a, b) => b.qualityScore - a.qualityScore)
-    .slice(0, 18)
+    .slice(0, 400)
+  return parsed.length > 0 ? parsed : fallback.slice(0, 400)
 }
 
 function rankComments(comments: ResearchCommentItem[]): ResearchCommentItem[] {
@@ -112,7 +123,6 @@ function rankComments(comments: ResearchCommentItem[]): ResearchCommentItem[] {
   return [...comments]
     .map(score)
     .sort((a, b) => b.qualityScore - a.qualityScore)
-    .slice(0, 18)
 }
 
 function parseDrafts(
@@ -148,23 +158,23 @@ function parseDrafts(
             {
               startSec: 0,
               endSec: 3,
-              title: '钩子',
+              title: '开场',
               purpose: '留人',
-              editingStyle: '近景急推 + 关键词闪入，切点落在痛点词上',
+              editingStyle: '强视觉/提问先出，字幕快速点题',
             },
             {
               startSec: 3,
               endSec: Math.max(10, durationSec - 6),
-              title: '主体',
+              title: '主体展开',
               purpose: '讲点',
-              editingStyle: '口播/示意图交替，字幕密度升高，硬切为主',
+              editingStyle: '信息段硬切，字幕密度随讲解升高',
             },
             {
               startSec: Math.max(10, durationSec - 6),
               endSec: durationSec,
               title: '收束',
-              purpose: '互动',
-              editingStyle: '镜头推近，提问字幕置底，留停顿',
+              purpose: '收束',
+              editingStyle: '结论或观察要点定格，留短暂停顿',
             },
           ]
     const editingStyleJoined = structureBlocks
@@ -193,20 +203,204 @@ function parseDrafts(
               {
                 label: '开头',
                 purpose: '留人',
-                text: sample.title.slice(0, 40) || '直接抛出选题痛点',
+                text: sample.title.slice(0, 40) || '先抛出本片核心对象或问题',
               },
             ],
       structureBlocks,
       editingStyle: String(row.editingStyle ?? editingStyleJoined).trim() || editingStyleJoined,
       comments: parseComments(row.comments, ranked),
       takeaways: asStringArray(row.takeaways, [
-        `可复用「${sample.title.slice(0, 18)}」的开头留人方式`,
+        `可复用「${sample.title.slice(0, 18)}」的开场信息切入方式`,
       ]).slice(0, 5),
     })
   }
 
   if (drafts.length === 0) throw new Error('模型未返回可用视频拆解')
   return drafts
+}
+
+function cuesTextInRange(
+  cues: Array<{ startSec: number; endSec: number; text: string }> | undefined,
+  startSec: number,
+  endSec: number,
+): string {
+  if (!cues?.length) return ''
+  return cues
+    .filter((cue) => cue.startSec >= startSec - 0.35 && cue.startSec < endSec)
+    .map((cue) => cue.text.trim())
+    .filter(Boolean)
+    .join(' ')
+}
+
+function looksLikeWrongAnalysis(analysis: string, segmentText: string, title: string): boolean {
+  const a = analysis.replace(/\s+/g, '')
+  if (!a) return true
+  if (!segmentText.trim()) return false
+  // Title pasted as "analysis"
+  if (title && a.includes(title.replace(/\s+/g, '').slice(0, 16))) return true
+  // Almost no shared characters with the segment transcript (too generic / off-topic)
+  const segChars = new Set(segmentText.replace(/\s+/g, ''))
+  let hit = 0
+  for (const ch of a) {
+    if (segChars.has(ch)) hit += 1
+  }
+  return hit < Math.min(8, Math.floor(segChars.size * 0.08))
+}
+
+function heuristicAnalysis(
+  block: ResearchStructureBlock,
+  segmentText: string,
+): string {
+  const quote = segmentText.slice(0, 48).trim()
+  const q = quote ? `「${quote}${segmentText.length > 48 ? '…' : ''}」` : '本段口播'
+  switch (block.purpose) {
+    case '留人':
+    case '设问':
+      return `${q}：用好奇、反差或提问先稳住停留，再引入本片要讲的对象/问题。`
+    case '共鸣':
+      return `${q}：对准观众已有误判或真实处境，建立认同后再给信息。`
+    case '讲点':
+    case '讲解':
+    case '举证':
+    case '示范':
+      return `${q}：推进本段核心信息（特征/步骤/证据/场景），信息密度上升，少空话。`
+    case '收束':
+      return `${q}：汇总本片关键结论或观察要点，让观众带走可复述的知识点。`
+    case '转化':
+    case '互动':
+      return `${q}：收束观点并引导关注/评论/收藏，把前面内容落成行动。`
+    default:
+      return `${q}：服务整片叙事中的「${block.purpose || block.title}」功能，推进下一信息点。`
+  }
+}
+
+const BODY_TITLES = [
+  '对象展开',
+  '特征讲解',
+  '场景说明',
+  '方法拆解',
+  '案例证据',
+  '对比强化',
+  '细节补充',
+  '认知升级',
+]
+
+/** Split oversized body blocks using cue boundaries (~30s chunks). */
+function splitOversizedBlocks(
+  blocks: ResearchStructureBlock[],
+  cues: Array<{ startSec: number; endSec: number; text: string }>,
+  durationSec: number,
+): ResearchStructureBlock[] {
+  const maxSpan = 40
+  const out: ResearchStructureBlock[] = []
+  let bodyIndex = 0
+
+  for (const block of blocks) {
+    const span = block.endSec - block.startSec
+    const isBody = block.purpose === '讲点' || /方法|案例|经历|证据|讲点/.test(block.title)
+    if (!isBody || span <= maxSpan) {
+      out.push(block)
+      continue
+    }
+
+    const inRange = cues
+      .filter((cue) => cue.startSec >= block.startSec - 0.05 && cue.startSec < block.endSec - 0.05)
+      .sort((a, b) => a.startSec - b.startSec)
+
+    if (inRange.length < 3) {
+      out.push(block)
+      continue
+    }
+
+    const parts: ResearchStructureBlock[] = []
+    let partStart = block.startSec
+    let lastCut = block.startSec
+    for (const cue of inRange) {
+      if (cue.startSec - partStart >= 24 && cue.startSec - lastCut >= 8) {
+        parts.push({
+          startSec: partStart,
+          endSec: cue.startSec,
+          title: BODY_TITLES[bodyIndex % BODY_TITLES.length]!,
+          purpose: '讲点',
+          editingStyle: block.editingStyle,
+          analysis: block.analysis,
+          keyLines: block.keyLines,
+        })
+        bodyIndex += 1
+        partStart = cue.startSec
+        lastCut = cue.startSec
+      }
+    }
+    if (partStart < block.endSec - 1) {
+      parts.push({
+        startSec: partStart,
+        endSec: Math.min(block.endSec, durationSec),
+        title: BODY_TITLES[bodyIndex % BODY_TITLES.length]!,
+        purpose: '讲点',
+        editingStyle: block.editingStyle,
+        analysis: block.analysis,
+        keyLines: block.keyLines,
+      })
+      bodyIndex += 1
+    }
+    if (parts.length <= 1) out.push(block)
+    else out.push(...parts)
+  }
+
+  return out.slice(0, 16)
+}
+
+/** Align analysis/keyLines to real cues; replace off-topic LLM fluff. */
+function enrichBlocksAgainstTranscript(draft: ResearchVideoDraft): ResearchVideoDraft {
+  const cues = draft.transcriptCues || []
+  const durationSec = Math.max(
+    draft.durationSec || 0,
+    ...(draft.structureBlocks || []).map((b) => b.endSec),
+    ...(cues.map((c) => c.endSec) || [0]),
+  )
+  const split = splitOversizedBlocks(draft.structureBlocks || [], cues, durationSec || 45)
+  const blocks = split.map((block) => {
+    const segmentText = cuesTextInRange(cues, block.startSec, block.endSec)
+    const keyLines = (block.keyLines || []).filter((line) => {
+      const compact = line.replace(/\s+/g, '')
+      return compact.length > 0 && segmentText.replace(/\s+/g, '').includes(compact.slice(0, 10))
+    })
+    let analysis = (block.analysis || '').trim()
+    if (looksLikeWrongAnalysis(analysis, segmentText, draft.title)) {
+      analysis = heuristicAnalysis(block, segmentText)
+    }
+    const next: ResearchStructureBlock = {
+      ...block,
+      analysis,
+    }
+    if (keyLines.length > 0) next.keyLines = keyLines.slice(0, 3)
+    else if (segmentText) {
+      next.keyLines = segmentText
+        .split(/(?<=[。！？!?])/)
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 6)
+        .slice(0, 2)
+    }
+    return next
+  })
+
+  const scriptSegments = blocks.map((block, index) => {
+    const existing = draft.scriptSegments?.[index]
+    const segmentText = cuesTextInRange(cues, block.startSec, block.endSec)
+    if (
+      existing?.text?.trim() &&
+      !looksLikeWrongAnalysis(existing.text, segmentText, draft.title)
+    ) {
+      return { ...existing, label: block.title, purpose: block.purpose }
+    }
+    return {
+      label: block.title,
+      purpose: block.purpose,
+      text: block.analysis || existing?.text || '',
+    }
+  })
+
+  return { ...draft, structureBlocks: blocks, scriptSegments }
 }
 
 export async function analyzeResearchWithLlm(
@@ -232,9 +426,15 @@ export async function analyzeResearchWithLlm(
       comment: item.commentCount,
       share: item.shareCount,
       durationSec: item.durationSec,
-      description: item.description.slice(0, 120),
+      description: item.description.slice(0, 160),
+      fullTranscript: (item.fullTranscript || '').slice(0, 8000),
+      transcriptCues: (item.transcriptCues || []).slice(0, 140).map((c) => ({
+        startSec: Number(c.startSec.toFixed(2)),
+        endSec: Number(c.endSec.toFixed(2)),
+        text: c.text.slice(0, 120),
+      })),
       topComments: rankComments(item.comments)
-        .slice(0, 8)
+        .slice(0, 20)
         .map((c) => ({
           author: c.author,
           content: c.content,
@@ -244,45 +444,88 @@ export async function analyzeResearchWithLlm(
     }))
 
     const result = await llm.chat({
-      temperature: 0.35,
-      maxTokens: 4500,
+      temperature: 0.25,
+      maxTokens: 8000,
       messages: [
         {
           role: 'system',
-          content: `你是抖音短视频拆解教练。针对给定选题与真实样本视频，输出可执行的文案/结构/类型/评论洞察。
-只输出 JSON，不要 markdown。结构：
+          content: `你是抖音短视频拆解教练。输入里的 fullTranscript / transcriptCues 是 ASR 真实口播，必须以此为唯一事实来源。
+
+硬性要求：
+1) 禁止编造、改写、润色成「假口播」。界面按时间轴展示原转写；你只做「结构切分 + 逻辑分析」。
+2) 先判断内容类型，再按该类型的信息推进来切结构——禁止给所有视频套同一套营销模板。
+   - 禁止默认写成：钩子→痛点→经历转折→方法拆解→CTA。
+   - 科普/自然/物种类：用「开场设问、对象亮相、形态特征、习性场景、观察要点、知识收束」等贴近内容的段名。
+   - 教程/步骤类：用「结果预告、问题场景、步骤1/2/3、注意点、清单收束」。
+   - 人物故事类：才可用「钩子、误判/痛点、背景、转折、收获、收束」。
+   - 带货/探店类：才强调卖点、对比、决策与转化。
+   - title 必须概括该段在讲什么（可含物种名/步骤名），不要空泛标签。
+3) structureBlocks 必须切细：
+   - 60 秒以上建议 6～14 段；禁止把 1 分钟以上塞进单一段。
+   - 单段通常 6～35 秒；startSec/endSec 对齐 transcriptCues，覆盖 0→durationSec，段间衔接、少重叠。
+4) purpose 用短标签描述段落功能，可按内容自选：留人|设问|讲点|讲解|举证|示范|共鸣|收束|互动|转化|过渡；不要硬塞「痛点」。
+5) 每段 analysis 紧扣该段原转写：信息推进、讲解策略、为何这样讲；引用本段原意，禁止空话套话。
+6) keyLines：从该时段原转写摘 1～3 句原话短句（须能在 cues 中找到近似原文）。
+7) editingStyle：按口播停顿与信息密度推断字幕/切点/镜头，写可观察点。
+8) scriptSegments 与 structureBlocks 一一对应，text 写本段策略总结（非台词复述）。
+9) summary：一句话概括「讲了什么 + 结构策略」，必须从转写推出。
+10) videoType 在 口播|带货|探店|教程|剧情|资讯|科普|其他 中选最贴切的一个。
+11) comments 可省略；不要编造互动数据。
+
+只输出 JSON，不要 markdown：
 {
   "videos": [{
     "awemeId":"必须与输入一致",
     "title":"可微调标题",
-    "videoType":"口播|带货|探店|教程|剧情|资讯|其他",
+    "videoType":"口播|带货|探店|教程|剧情|资讯|科普|其他",
     "matchScore":1-100,
-    "summary":"一句话摘要",
-    "editingStyle":"可省略；优先在 structureBlocks[].editingStyle 写每段剪辑",
-    "scriptSegments":[{"label":"段名","purpose":"目的","text":"文案要点"}],
-    "structureBlocks":[{"startSec":0,"endSec":3,"title":"钩子","purpose":"留人","editingStyle":"该段镜头/字幕/切点手法"}],
-    "comments":[{"author":"","content":"","diggCount":0,"replyCount":0,"replyRate":0,"qualityScore":1-100}],
-    "takeaways":["可复用要点"]
+    "summary":"基于原转写的一句话摘要",
+    "scriptSegments":[{"label":"段名","purpose":"留人|设问|讲点|讲解|举证|示范|共鸣|收束|互动|转化","text":"本段策略总结"}],
+    "structureBlocks":[{
+      "startSec":0,"endSec":8,"title":"贴合内容的段名","purpose":"设问",
+      "editingStyle":"具体剪辑/字幕推断",
+      "analysis":"该段逻辑与作用（基于原文）",
+      "keyLines":["原话短句"]
+    }],
+    "takeaways":["创作者可复用的结构/讲解要点"]
   }]
 }
-structureBlocks 必须为每一段写 editingStyle（镜头、字幕、切点、转场），不要只用整片一句话概括剪辑。
-comments 优先从输入 topComments 里挑优质评论（高赞、高回复），可改写精炼但不要编造互动数据。`,
+若 fullTranscript 为空，summary 写明「无可用转写」，structureBlocks 仅按时长粗切并在 analysis 说明依据不足。`,
         },
         {
           role: 'user',
-          content: `选题：${topic.title}\n选题说明：${topic.summary || topic.reason}\n请拆解以下样本：\n${JSON.stringify(payload, null, 2)}`,
+          content: `选题：${topic.title}\n选题说明：${topic.summary || topic.reason}\n请先判断内容类型，再按该类型做细致结构拆解（不要套万能营销模板；不要编台词；长视频必须切细）：\n${JSON.stringify(payload, null, 2)}`,
         },
       ],
     })
 
+    const drafts = parseDrafts(extractJsonValue(result.content), samples).map((draft, index) => {
+      const sample = samples[index]
+      const withTranscript = {
+        ...draft,
+        fullTranscript: sample?.fullTranscript || draft.fullTranscript || '',
+        transcriptCues: sample?.transcriptCues || draft.transcriptCues || [],
+      }
+      return enrichBlocksAgainstTranscript(withTranscript)
+    })
+
     return {
-      drafts: parseDrafts(extractJsonValue(result.content), samples),
+      drafts,
       source: 'llm',
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : '大模型拆解失败'
     return {
-      drafts: buildRuleResearchFromSamples(topic, samples),
+      drafts: buildRuleResearchFromSamples(topic, samples).map((draft, index) =>
+        enrichBlocksAgainstTranscript({
+          ...draft,
+          fullTranscript: samples[index]?.fullTranscript || '',
+          transcriptCues: samples[index]?.transcriptCues || [],
+          summary: samples[index]?.fullTranscript
+            ? draft.summary
+            : `拆解失败：${message}`,
+        }),
+      ),
       source: 'fallback',
       note: message,
     }

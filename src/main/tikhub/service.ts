@@ -1,7 +1,6 @@
 import type {
   DouyinAccount,
   DouyinAccountPreview,
-  DouyinVideoItem,
   DouyinVideoPage,
   TikHubBalanceStatus,
   TikHubConnectionTestResult,
@@ -13,6 +12,7 @@ import type { TikHubRepository } from './repository'
 import {
   extractSecUserId,
   fetchOneVideo,
+  fetchOneVideoByShareUrl,
   fetchTikHubDailyUsage,
   fetchTikHubUserInfo,
   fetchUserPostVideos,
@@ -59,7 +59,8 @@ export interface TikHubService {
   ) => Promise<DouyinSearchVideoItem[]>
   searchUsers: (keyword: string) => Promise<DouyinSearchUserItem[]>
   listVideoComments: (awemeId: string, count?: number) => Promise<DouyinCommentItem[]>
-  fetchOneVideo: (awemeId: string) => Promise<DouyinVideoItem | null>
+  fetchOneVideo: (awemeId: string) => Promise<DouyinSearchVideoItem | null>
+  fetchOneVideoByShareUrl: (shareUrl: string) => Promise<DouyinSearchVideoItem | null>
 }
 
 function cacheAgeMs(fetchedAt: string | null | undefined): number {
@@ -366,7 +367,7 @@ export function createTikHubService(repo: TikHubRepository): TikHubService {
       return fetchUserSearch(client, query)
     },
 
-    listVideoComments: async (awemeId, count = 20) => {
+    listVideoComments: async (awemeId, count = 200) => {
       const client = requireClientOptions()
       if (!awemeId.trim()) throw new Error('缺少视频 ID')
       return fetchVideoComments(client, awemeId.trim(), count)
@@ -377,6 +378,13 @@ export function createTikHubService(repo: TikHubRepository): TikHubService {
       const id = awemeId.trim()
       if (!id) throw new Error('缺少视频 ID')
       return fetchOneVideo(client, id)
+    },
+
+    fetchOneVideoByShareUrl: async (shareUrl) => {
+      const client = requireClientOptions()
+      const url = shareUrl.trim()
+      if (!url) throw new Error('缺少分享链接')
+      return fetchOneVideoByShareUrl(client, url)
     },
   }
 }

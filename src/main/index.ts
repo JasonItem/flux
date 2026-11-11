@@ -22,6 +22,8 @@ import {
   type LlmProviderCreateInput,
   type LlmProviderUpdateInput,
   type TikHubSettingsUpdateInput,
+  type ResearchDissectByUrlInput,
+  type ResearchDissectRecordsQuery,
   type TopicManualInput,
   type TopicUpdateInput,
 } from '../shared/api'
@@ -36,6 +38,20 @@ import {
 import { createResearchService, type ResearchService } from './research/service'
 import { createTopicService, type TopicService } from './topic/service'
 import { createTrackService, type TrackService } from './track/service'
+import { createMediaService, type MediaService } from './media/service'
+import {
+  registerFluxMediaProtocol,
+  registerFluxMediaSchemePrivileged,
+} from './media/protocol'
+import { ensureLocalMediaServer } from './media/localServer'
+import { createJobService, type JobService } from './jobs/service'
+import { createWorkshopService, type WorkshopService } from './workshop/service'
+import { MediaChannels } from '../shared/media'
+import { JobChannels, type JobEnqueueInput } from '../shared/jobs'
+import {
+  WorkshopChannels,
+  type WorkshopScriptUpdateInput,
+} from '../shared/workshop'
 
 let database: AppDatabase | null = null
 let cleanupService: CleanupService | null = null
@@ -45,6 +61,11 @@ let trackService: TrackService | null = null
 let topicService: TopicService | null = null
 let researchService: ResearchService | null = null
 let accountAnalysisService: AccountAnalysisService | null = null
+let mediaService: MediaService | null = null
+let jobService: JobService | null = null
+let workshopService: WorkshopService | null = null
+
+registerFluxMediaSchemePrivileged()
 
 function databaseFilePath(): string {
   return join(app.getPath('userData'), 'studio.sqlite')
@@ -131,6 +152,21 @@ function requireTopic(): TopicService {
 function requireResearch(): ResearchService {
   if (!researchService) throw new Error('样本拆解服务尚未就绪')
   return researchService
+}
+
+function requireMedia(): MediaService {
+  if (!mediaService) throw new Error('媒体服务尚未就绪')
+  return mediaService
+}
+
+function requireJobs(): JobService {
+  if (!jobService) throw new Error('任务队列尚未就绪')
+  return jobService
+}
+
+function requireWorkshop(): WorkshopService {
+  if (!workshopService) throw new Error('创作工坊服务尚未就绪')
+  return workshopService
 }
 
 function requireAccountAnalysis(): AccountAnalysisService {
@@ -439,6 +475,16 @@ function registerResearchIpc(): void {
     wrapInvoke((_event, topicId: string) => requireResearch().listVideos(topicId)),
   )
   ipcMain.handle(
+    ResearchChannels.listDissectRecords,
+    wrapInvoke((_event, query?: ResearchDissectRecordsQuery) =>
+      requireResearch().listDissectRecords(query),
+    ),
+  )
+  ipcMain.handle(
+    ResearchChannels.listCustomVideos,
+    wrapInvoke(() => requireResearch().listCustomVideos()),
+  )
+  ipcMain.handle(
     ResearchChannels.analyzeTopic,
     wrapInvoke((_event, topicId: string) => requireResearch().analyzeTopic(topicId)),
   )
@@ -457,6 +503,92 @@ function registerResearchIpc(): void {
   ipcMain.handle(
     ResearchChannels.enrichVideoMedia,
     wrapInvoke((_event, id: string) => requireResearch().enrichVideoMedia(id)),
+  )
+  ipcMain.handle(
+    ResearchChannels.ensureLocalMedia,
+    wrapInvoke((_event, id: string, options?: { force?: boolean }) =>
+      requireResearch().ensureLocalMedia(id, options),
+    ),
+  )
+  ipcMain.handle(
+    ResearchChannels.enqueueDissect,
+    wrapInvoke((_event, id: string, options?: { force?: boolean }) =>
+      requireResearch().enqueueDissect(id, options),
+    ),
+  )
+  ipcMain.handle(
+    ResearchChannels.enqueueDissectByUrl,
+    wrapInvoke((_event, input: ResearchDissectByUrlInput) =>
+      requireResearch().enqueueDissectByUrl(input),
+    ),
+  )
+}
+
+function registerWorkshopIpc(): void {
+  ipcMain.handle(
+    WorkshopChannels.listScripts,
+    wrapInvoke(() => requireWorkshop().listScripts()),
+  )
+  ipcMain.handle(
+    WorkshopChannels.getScript,
+    wrapInvoke((_event, id: string) => requireWorkshop().getScript(id)),
+  )
+  ipcMain.handle(
+    WorkshopChannels.updateScript,
+    wrapInvoke((_event, input: WorkshopScriptUpdateInput) =>
+      requireWorkshop().updateScript(input),
+    ),
+  )
+  ipcMain.handle(
+    WorkshopChannels.deleteScript,
+    wrapInvoke((_event, id: string) => {
+      requireWorkshop().deleteScript(id)
+    }),
+  )
+  ipcMain.handle(
+    WorkshopChannels.enqueueReplicate,
+    wrapInvoke((_event, researchVideoId: string, options?: { force?: boolean }) =>
+      requireWorkshop().enqueueReplicate(researchVideoId, options),
+    ),
+  )
+}
+
+function registerJobsIpc(): void {
+  ipcMain.handle(
+    JobChannels.list,
+    wrapInvoke(() => requireJobs().list()),
+  )
+  ipcMain.handle(
+    JobChannels.enqueue,
+    wrapInvoke((_event, input: JobEnqueueInput) => requireJobs().enqueue(input)),
+  )
+  ipcMain.handle(
+    JobChannels.cancel,
+    wrapInvoke((_event, id: string) => requireJobs().cancel(id)),
+  )
+  ipcMain.handle(
+    JobChannels.clearFinished,
+    wrapInvoke(() => requireJobs().clearFinished()),
+  )
+}
+
+function registerMediaIpc(): void {
+  ipcMain.handle(
+    MediaChannels.ensureByAwemeId,
+    wrapInvoke(
+      (_event, awemeId: string, options?: { playUrl?: string | null; force?: boolean }) =>
+        requireMedia().ensureByAwemeId(awemeId, options),
+    ),
+  )
+  ipcMain.handle(
+    MediaChannels.ensureResearchVideo,
+    wrapInvoke((_event, id: string, options?: { force?: boolean }) =>
+      requireMedia().ensureResearchVideo(id, options),
+    ),
+  )
+  ipcMain.handle(
+    MediaChannels.getLocalPlayUrl,
+    wrapInvoke((_event, awemeId: string) => requireMedia().getLocalPlayUrl(awemeId)),
   )
 }
 
@@ -504,6 +636,10 @@ function registerCleanupIpc(): void {
     CleanupChannels.clearAnalysisCache,
     wrapInvoke(() => requireCleanup().clearAnalysisCache()),
   )
+  ipcMain.handle(
+    CleanupChannels.clearMediaCache,
+    wrapInvoke(() => requireCleanup().clearMediaCache()),
+  )
 }
 
 app.setName('Flux')
@@ -512,7 +648,10 @@ if (process.platform !== 'darwin') {
   Menu.setApplicationMenu(null)
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  await ensureLocalMediaServer()
+  registerFluxMediaProtocol()
+
   // 抖音/字节 CDN 播放常校验 Referer，补上才能让 <video> 拉到流
   session.defaultSession.webRequest.onBeforeSendHeaders(
     {
@@ -556,18 +695,37 @@ void app.whenReady().then(() => {
       database.topic,
       llmService,
     )
+    mediaService = createMediaService({
+      tikhub: tikhubService,
+      research: database.research,
+    })
+    jobService = createJobService({
+      jobs: database.jobs,
+      getResearch: () => requireResearch(),
+      getMedia: () => requireMedia(),
+      getWorkshop: () => requireWorkshop(),
+    })
     researchService = createResearchService(
       database.research,
       database.topic,
       llmService,
       tikhubService,
+      mediaService,
+      jobService,
     )
+    workshopService = createWorkshopService({
+      workshop: database.workshop,
+      research: database.research,
+      llm: llmService,
+      jobs: jobService,
+    })
     accountAnalysisService = createAccountAnalysisService(
       database.accountAnalysis,
       tikhubService,
       database.track,
       llmService,
     )
+    jobService.resumeQueued()
     const status = database.status()
     console.log(
       `[studio] sqlite ready ${status.path} schema=${String(status.schemaVersion)} migrations=${status.appliedMigrations.join(',')}`,
@@ -589,6 +747,9 @@ void app.whenReady().then(() => {
   registerTrackIpc()
   registerTopicIpc()
   registerResearchIpc()
+  registerWorkshopIpc()
+  registerJobsIpc()
+  registerMediaIpc()
   registerAccountAnalysisIpc()
   registerCleanupIpc()
 

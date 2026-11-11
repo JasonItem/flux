@@ -3,6 +3,7 @@ export const CleanupChannels = {
   clearElectronCache: 'cleanup:clear-electron-cache',
   clearUsageLogs: 'cleanup:clear-usage-logs',
   clearAnalysisCache: 'cleanup:clear-analysis-cache',
+  clearMediaCache: 'cleanup:clear-media-cache',
 } as const
 
 export type CleanupUsageKeepDays = 30 | 90
@@ -35,6 +36,11 @@ export interface CleanupStatus {
     researchVideoCount: number
     accountRawCount: number
   }
+  mediaCache: {
+    bytes: number
+    fileCount: number
+    path: string
+  }
 }
 
 export interface CleanupActionResult {
@@ -47,4 +53,5 @@ export interface CleanupApi {
   clearElectronCache: () => Promise<CleanupActionResult>
   clearUsageLogs: (keepDays: CleanupUsageKeepDays) => Promise<CleanupActionResult>
   clearAnalysisCache: () => Promise<CleanupActionResult>
+  clearMediaCache: () => Promise<CleanupActionResult>
 }

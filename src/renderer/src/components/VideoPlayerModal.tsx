@@ -1,9 +1,10 @@
 import { Button, Flexbox, Modal, Text } from '@lobehub/ui'
 import { ExternalLink, Play } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { DouyinTitleLink, resolveDouyinVideoUrl } from './DouyinTitleLink'
 import { isAppMockMediaUrl, resolveMediaUrl } from '../mockMedia'
+import { getStudio } from '../studioApi'
 
 export interface VideoPlayerTarget {
   title: string
@@ -11,6 +12,7 @@ export interface VideoPlayerTarget {
   playUrl: string | null
   profileUrl: string
   awemeId?: string | null
+  researchVideoId?: string
   authorNickname?: string
 }
 
@@ -23,18 +25,63 @@ export function VideoPlayerModal({
   video: VideoPlayerTarget | null
   onClose: () => void
 }) {
-  const playUrl = resolveMediaUrl(video?.playUrl)
+  const [playUrlOverride, setPlayUrlOverride] = useState<string | null>(null)
+  const [playFailed, setPlayFailed] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const retried = useRef(false)
+
+  const playUrl = resolveMediaUrl(playUrlOverride ?? video?.playUrl)
   const coverUrl = resolveMediaUrl(video?.coverUrl) ?? video?.coverUrl ?? null
   const externalUrl = resolveDouyinVideoUrl({
     profileUrl: video?.profileUrl,
     awemeId: video?.awemeId,
   })
   const canOpenExternal = Boolean(externalUrl) && !isAppMockMediaUrl(externalUrl)
-  const [playFailed, setPlayFailed] = useState(false)
 
   useEffect(() => {
     setPlayFailed(false)
-  }, [video?.playUrl, open])
+    setPlayUrlOverride(null)
+    retried.current = false
+  }, [video?.playUrl, video?.researchVideoId, video?.awemeId, open])
+
+  useEffect(() => {
+    if (
+      playUrl?.startsWith('flux-media://') ||
+      playUrl?.startsWith('http://127.0.0.1:') ||
+      playUrl?.startsWith('http://localhost:')
+    ) {
+      setPlayFailed(false)
+      retried.current = false
+    }
+  }, [playUrl])
+
+  const retryDownload = async () => {
+    if (retried.current || retrying || !video) return
+    retried.current = true
+    setRetrying(true)
+    try {
+      if (video.researchVideoId) {
+        const next = await getStudio().research.ensureLocalMedia(video.researchVideoId, {
+          force: true,
+        })
+        if (next.playUrl) setPlayUrlOverride(next.playUrl)
+        setPlayFailed(false)
+      } else if (video.awemeId) {
+        const next = await getStudio().media.ensureByAwemeId(video.awemeId, {
+          playUrl: video.playUrl,
+          force: true,
+        })
+        setPlayUrlOverride(next.playUrl)
+        setPlayFailed(false)
+      } else {
+        setPlayFailed(true)
+      }
+    } catch {
+      setPlayFailed(true)
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   const showFallback = !playUrl || playFailed
 
@@ -68,7 +115,7 @@ export function VideoPlayerModal({
               poster={coverUrl ?? undefined}
               src={playUrl!}
               onError={() => {
-                setPlayFailed(true)
+                void retryDownload()
               }}
             />
           ) : (
@@ -87,9 +134,11 @@ export function VideoPlayerModal({
               )}
               <div className="research-player-fallback-mask">
                 <Text type="secondary">
-                  {playFailed
-                    ? '直链已失效或受平台限制，请打开抖音原页观看'
-                    : '暂无直链，可打开抖音原页观看'}
+                  {retrying
+                    ? '正在重新下载本地缓存…'
+                    : playFailed
+                      ? '直链已失效或受平台限制，请打开抖音原页观看'
+                      : '暂无直链，可打开抖音原页观看'}
                 </Text>
                 {canOpenExternal && externalUrl ? (
                   <Button

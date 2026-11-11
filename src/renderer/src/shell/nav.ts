@@ -6,6 +6,7 @@ import {
   Compass,
   KeyRound,
   LayoutDashboard,
+  PenLine,
   ScrollText,
   Trash2,
   Users,
@@ -53,6 +54,14 @@ export const mainNav: readonly MainNavItem[] = [
     emptyTitle: '还没有分析结果',
     emptyDescription: '选择选题并开始分析后，样本会显示在这里。',
     icon: Clapperboard,
+  },
+  {
+    href: '/workshop',
+    label: '创作工坊',
+    description: '保存与编辑 AI 复刻的口播脚本，从样本思路变成可拍文案。',
+    emptyTitle: '还没有脚本',
+    emptyDescription: '在样本详情点「复刻脚本」后，生成结果会出现在这里。',
+    icon: PenLine,
   },
   {
     href: '/accounts',

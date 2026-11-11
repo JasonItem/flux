@@ -38,6 +38,21 @@ function sortComments(list: ThreadComment[], key: CommentSortKey): ThreadComment
     .sort((a, b) => rank(b) - rank(a))
 }
 
+function commentsSignature(list: ThreadComment[]): string {
+  if (list.length === 0) return '0'
+  const head = list[0]
+  const mid = list[Math.floor(list.length / 2)]
+  const tail = list[list.length - 1]
+  return [
+    String(list.length),
+    head?.id ?? '',
+    mid?.id ?? '',
+    tail?.id ?? '',
+    String(head?.diggCount ?? 0),
+    String(tail?.diggCount ?? 0),
+  ].join(':')
+}
+
 function CommentNode({
   comment,
   depth,
@@ -51,7 +66,11 @@ function CommentNode({
   return (
     <div className={depth === 0 ? 'comment-thread__item' : 'comment-thread__item is-child'}>
       <Flexbox gap={10} horizontal style={{ alignItems: 'flex-start' }}>
-        <Avatar avatar={comment.avatarUrl ?? undefined} size={depth === 0 ? 36 : 28} title={comment.author} />
+        <Avatar
+          avatar={comment.avatarUrl ?? undefined}
+          size={depth === 0 ? 36 : 28}
+          title={comment.author}
+        />
         <Flexbox gap={4} style={{ minWidth: 0, flex: 1 }}>
           <Text type="secondary">{comment.author}</Text>
           <Text>{comment.content}</Text>
@@ -100,19 +119,32 @@ function CommentNode({
   )
 }
 
-export function CommentThreadList({ comments }: { comments: ThreadComment[] }) {
+export function CommentThreadList({
+  comments,
+  totalCommentCount,
+}: {
+  comments: ThreadComment[]
+  /** 视频侧统计的评论总数（可能远大于本地样本） */
+  totalCommentCount?: number
+}) {
   const [sortKey, setSortKey] = useState<CommentSortKey>('quality')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
+  const loadingMoreRef = useRef(false)
+  const sortedLengthRef = useRef(0)
 
+  const commentsSig = useMemo(() => commentsSignature(comments), [comments])
   const sorted = useMemo(() => sortComments(comments, sortKey), [comments, sortKey])
-  const visible = sorted.slice(0, visibleCount)
+  const visible = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount])
   const hasMore = visibleCount < sorted.length
+  sortedLengthRef.current = sorted.length
+  const reportedTotal = Math.max(totalCommentCount ?? 0, sorted.length)
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
-  }, [sortKey, comments])
+    loadingMoreRef.current = false
+  }, [sortKey, commentsSig])
 
   useEffect(() => {
     const root = scrollerRef.current
@@ -121,22 +153,39 @@ export function CommentThreadList({ comments }: { comments: ThreadComment[] }) {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisibleCount((prev) => Math.min(sorted.length, prev + PAGE_SIZE))
-        }
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        if (loadingMoreRef.current) return
+        loadingMoreRef.current = true
+        setVisibleCount((prev) => {
+          const next = Math.min(sortedLengthRef.current, prev + PAGE_SIZE)
+          return next
+        })
+        // 等布局稳定后再允许下一次加载，避免哨兵仍在视口内连环触发闪烁
+        window.setTimeout(() => {
+          loadingMoreRef.current = false
+        }, 120)
       },
-      { root, rootMargin: '80px', threshold: 0 },
+      { root, rootMargin: '24px', threshold: 0 },
     )
     observer.observe(sentinel)
     return () => {
       observer.disconnect()
     }
-  }, [hasMore, sorted.length, visible.length])
+  }, [hasMore, commentsSig, sortKey])
 
   return (
     <div className="comment-thread">
-      <Flexbox gap={8} horizontal style={{ alignItems: 'center', justifyContent: 'space-between' }} wrap="wrap">
-        <Text type="secondary">共 {String(sorted.length)} 条一级评论</Text>
+      <Flexbox
+        gap={8}
+        horizontal
+        style={{ alignItems: 'center', justifyContent: 'space-between' }}
+        wrap="wrap"
+      >
+        <Text type="secondary">
+          {reportedTotal > sorted.length
+            ? `已加载 ${String(sorted.length)} 条评论样本 · 视频约 ${formatCount(reportedTotal)} 条评论`
+            : `共 ${String(sorted.length)} 条一级评论`}
+        </Text>
         <Segmented<CommentSortKey>
           options={[
             { label: '质量', value: 'quality' },
@@ -157,11 +206,15 @@ export function CommentThreadList({ comments }: { comments: ThreadComment[] }) {
         ) : (
           visible.map((item) => <CommentNode key={item.id} comment={item} depth={0} />)
         )}
-        <div ref={sentinelRef} className="comment-thread__sentinel">
+        <div ref={sentinelRef} className="comment-thread__sentinel" aria-hidden={!hasMore}>
           {hasMore ? (
-            <Text type="secondary">下拉加载更多…</Text>
+            <Text type="secondary">滚动加载更多…</Text>
           ) : visible.length > 0 ? (
-            <Text type="secondary">已加载全部评论</Text>
+            <Text type="secondary">
+              {reportedTotal > sorted.length
+                ? `样本已全部展示（${String(sorted.length)} 条）；视频评论总量约 ${formatCount(reportedTotal)}`
+                : '已加载全部评论样本'}
+            </Text>
           ) : null}
         </div>
       </div>

@@ -2,9 +2,12 @@ import type { AccountAnalysisApi } from './accountAnalysis'
 import type { CleanupApi } from './cleanup'
 import type { LlmApi } from './llm'
 import type { TikHubApi } from './tikhub'
+import type { JobsApi } from './jobs'
+import type { MediaApi } from './media'
 import type { ResearchApi } from './research'
 import type { TopicApi } from './topic'
 import type { TrackApi } from './track'
+import type { WorkshopApi } from './workshop'
 
 export { CleanupChannels } from './cleanup'
 export type {
@@ -85,6 +88,10 @@ export type {
   ResearchAnalyzeResult,
   ResearchApi,
   ResearchCommentItem,
+  ResearchDissectByUrlInput,
+  ResearchDissectByUrlResult,
+  ResearchDissectRecordsQuery,
+  ResearchDissectRecordsResult,
   ResearchScriptSegment,
   ResearchStructureBlock,
   ResearchVideoDetail,
@@ -92,6 +99,28 @@ export type {
   ResearchVideoSummary,
   ResearchVideoType,
 } from './research'
+
+export { WorkshopChannels, workshopScriptHref } from './workshop'
+export type {
+  WorkshopApi,
+  WorkshopProgressEvent,
+  WorkshopScriptDetail,
+  WorkshopScriptSegment,
+  WorkshopScriptStatus,
+  WorkshopScriptSummary,
+  WorkshopScriptUpdateInput,
+} from './workshop'
+
+export { JobChannels } from './jobs'
+export type {
+  JobEnqueueInput,
+  JobKind,
+  JobPhase,
+  JobStatus,
+  JobsApi,
+  JobsChangedEvent,
+  StudioJob,
+} from './jobs'
 
 export { AccountAnalysisChannels } from './accountAnalysis'
 export type {
@@ -146,6 +175,9 @@ export interface StudioApi {
   track: TrackApi
   topic: TopicApi
   research: ResearchApi
+  workshop: WorkshopApi
+  media: MediaApi
+  jobs: JobsApi
   accountAnalysis: AccountAnalysisApi
   cleanup: CleanupApi
 }

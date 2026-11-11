@@ -27,6 +27,7 @@ export interface CleanupService {
   clearElectronCache: () => Promise<CleanupActionResult>
   clearUsageLogs: (keepDays: CleanupUsageKeepDays) => CleanupActionResult
   clearAnalysisCache: () => CleanupActionResult
+  clearMediaCache: () => CleanupActionResult
 }
 
 function directoryBytes(root: string): number {
@@ -84,6 +85,28 @@ function fileBytes(path: string): number {
   } catch {
     return 0
   }
+}
+
+function countFiles(root: string): number {
+  if (!existsSync(root)) return 0
+  let count = 0
+  const stack = [root]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current) continue
+    let entries
+    try {
+      entries = readdirSync(current, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      const full = join(current, entry.name)
+      if (entry.isDirectory()) stack.push(full)
+      else if (entry.isFile()) count += 1
+    }
+  }
+  return count
 }
 
 function videoAnalysesBytes(raw: string | null): { bytes: number; count: number } {
@@ -223,6 +246,16 @@ export function createCleanupService(input: {
     }
   }
 
+  const mediaDir = join(userDataPath, 'media')
+
+  function measureMediaCache(): CleanupStatus['mediaCache'] {
+    return {
+      bytes: directoryBytes(mediaDir),
+      fileCount: countFiles(mediaDir),
+      path: mediaDir,
+    }
+  }
+
   return {
     getStatus: () => {
       const electronCache = measureElectronCache(userDataPath)
@@ -235,6 +268,7 @@ export function createCleanupService(input: {
         electronCache,
         usageLogs: measureUsageLogs(),
         analysisCache: measureAnalysisCache(),
+        mediaCache: measureMediaCache(),
       }
     },
 
@@ -324,6 +358,31 @@ export function createCleanupService(input: {
       return {
         freedBytes: Math.max(0, before.bytes - after.bytes),
         detail: `已清空单视频分析缓存、样本拆解正文（${String(breakdown.changes)}）与账号原始 JSON（${String(raw.changes)}）；诊断摘要与作品列表保留`,
+      }
+    },
+
+    clearMediaCache: () => {
+      const before = measureMediaCache()
+      safeRemoveDir(mediaDir)
+      // 重置样本本地路径状态，下次按需重下
+      try {
+        db.prepare(
+          `UPDATE research_videos
+           SET local_path = NULL,
+               media_status = 'none',
+               play_url = CASE
+                 WHEN play_url LIKE 'flux-media://%' THEN NULL
+                 ELSE play_url
+               END,
+               updated_at = ?`,
+        ).run(new Date().toISOString())
+      } catch {
+        // schema may lag in mid-migrate
+      }
+      const after = measureMediaCache()
+      return {
+        freedBytes: Math.max(0, before.bytes - after.bytes),
+        detail: `已删除本地视频缓存约 ${String(before.fileCount)} 个文件；下次播放/拆解会重新下载`,
       }
     },
   }

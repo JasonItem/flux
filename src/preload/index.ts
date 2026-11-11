@@ -10,6 +10,7 @@ import {
   TopicChannels,
   TrackChannels,
   WindowChannels,
+  WorkshopChannels,
   type CleanupUsageKeepDays,
   type DouyinAccountPreview,
   type LlmChatInput,
@@ -25,7 +26,12 @@ import {
   type TikHubSettingsUpdateInput,
   type TopicManualInput,
   type TopicUpdateInput,
+  type WorkshopProgressEvent,
+  type WorkshopScriptUpdateInput,
 } from '../shared/api'
+import { JobChannels, type JobsChangedEvent } from '../shared/jobs'
+import { MediaChannels, type MediaProgressEvent } from '../shared/media'
+import type { ResearchProgressEvent } from '../shared/research'
 
 const api: StudioApi = {
   getDatabaseStatus: () => ipcRenderer.invoke(DatabaseStatusChannel),
@@ -136,12 +142,79 @@ const api: StudioApi = {
   },
   research: {
     listVideos: (topicId: string) => ipcRenderer.invoke(ResearchChannels.listVideos, topicId),
+    listDissectRecords: (query) =>
+      ipcRenderer.invoke(ResearchChannels.listDissectRecords, query),
+    listCustomVideos: () => ipcRenderer.invoke(ResearchChannels.listCustomVideos),
     analyzeTopic: (topicId: string) => ipcRenderer.invoke(ResearchChannels.analyzeTopic, topicId),
     getVideo: (id: string) => ipcRenderer.invoke(ResearchChannels.getVideo, id),
     refreshVideo: (id: string) => ipcRenderer.invoke(ResearchChannels.refreshVideo, id),
     enrichTopicMedia: (topicId: string) =>
       ipcRenderer.invoke(ResearchChannels.enrichTopicMedia, topicId),
     enrichVideoMedia: (id: string) => ipcRenderer.invoke(ResearchChannels.enrichVideoMedia, id),
+    ensureLocalMedia: (id: string, options?: { force?: boolean }) =>
+      ipcRenderer.invoke(ResearchChannels.ensureLocalMedia, id, options),
+    enqueueDissect: (id: string, options?: { force?: boolean }) =>
+      ipcRenderer.invoke(ResearchChannels.enqueueDissect, id, options),
+    enqueueDissectByUrl: (input) =>
+      ipcRenderer.invoke(ResearchChannels.enqueueDissectByUrl, input),
+    onProgress: (callback) => {
+      const listener = (_event: IpcRendererEvent, payload: ResearchProgressEvent) => {
+        callback(payload)
+      }
+      ipcRenderer.on(ResearchChannels.progress, listener)
+      return () => {
+        ipcRenderer.removeListener(ResearchChannels.progress, listener)
+      }
+    },
+  },
+  workshop: {
+    listScripts: () => ipcRenderer.invoke(WorkshopChannels.listScripts),
+    getScript: (id: string) => ipcRenderer.invoke(WorkshopChannels.getScript, id),
+    updateScript: (input: WorkshopScriptUpdateInput) =>
+      ipcRenderer.invoke(WorkshopChannels.updateScript, input),
+    deleteScript: (id: string) => ipcRenderer.invoke(WorkshopChannels.deleteScript, id),
+    enqueueReplicate: (researchVideoId: string, options?: { force?: boolean }) =>
+      ipcRenderer.invoke(WorkshopChannels.enqueueReplicate, researchVideoId, options),
+    onProgress: (callback) => {
+      const listener = (_event: IpcRendererEvent, payload: WorkshopProgressEvent) => {
+        callback(payload)
+      }
+      ipcRenderer.on(WorkshopChannels.progress, listener)
+      return () => {
+        ipcRenderer.removeListener(WorkshopChannels.progress, listener)
+      }
+    },
+  },
+  jobs: {
+    list: () => ipcRenderer.invoke(JobChannels.list),
+    enqueue: (input) => ipcRenderer.invoke(JobChannels.enqueue, input),
+    cancel: (id) => ipcRenderer.invoke(JobChannels.cancel, id),
+    clearFinished: () => ipcRenderer.invoke(JobChannels.clearFinished),
+    onChanged: (callback) => {
+      const listener = (_event: IpcRendererEvent, payload: JobsChangedEvent) => {
+        callback(payload)
+      }
+      ipcRenderer.on(JobChannels.changed, listener)
+      return () => {
+        ipcRenderer.removeListener(JobChannels.changed, listener)
+      }
+    },
+  },
+  media: {
+    ensureByAwemeId: (awemeId, options) =>
+      ipcRenderer.invoke(MediaChannels.ensureByAwemeId, awemeId, options),
+    ensureResearchVideo: (id, options) =>
+      ipcRenderer.invoke(MediaChannels.ensureResearchVideo, id, options),
+    getLocalPlayUrl: (awemeId) => ipcRenderer.invoke(MediaChannels.getLocalPlayUrl, awemeId),
+    onProgress: (callback) => {
+      const listener = (_event: IpcRendererEvent, payload: MediaProgressEvent) => {
+        callback(payload)
+      }
+      ipcRenderer.on(MediaChannels.progress, listener)
+      return () => {
+        ipcRenderer.removeListener(MediaChannels.progress, listener)
+      }
+    },
   },
   accountAnalysis: {
     getAnalysis: (accountId: string) =>
@@ -159,6 +232,7 @@ const api: StudioApi = {
     clearUsageLogs: (keepDays: CleanupUsageKeepDays) =>
       ipcRenderer.invoke(CleanupChannels.clearUsageLogs, keepDays),
     clearAnalysisCache: () => ipcRenderer.invoke(CleanupChannels.clearAnalysisCache),
+    clearMediaCache: () => ipcRenderer.invoke(CleanupChannels.clearMediaCache),
   },
 }
 
