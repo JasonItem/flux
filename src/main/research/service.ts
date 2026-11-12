@@ -42,7 +42,7 @@ export interface ResearchService {
   runDissect: (
     id: string,
     force?: boolean,
-    hooks?: { onProgress?: (event: ResearchProgressEvent) => void },
+    hooks?: { onProgress?: (event: ResearchProgressEvent) => void; signal?: AbortSignal },
   ) => Promise<ResearchVideoDetail>
   enrichTopicMedia: (topicId: string) => Promise<ResearchVideoSummary[]>
   enrichVideoMedia: (id: string) => Promise<ResearchVideoSummary>
@@ -581,7 +581,7 @@ async function dissectVideo(
   tikhub: TikHubService,
   id: string,
   force = false,
-  hooks?: { onProgress?: (event: ResearchProgressEvent) => void },
+  hooks?: { onProgress?: (event: ResearchProgressEvent) => void; signal?: AbortSignal },
 ): Promise<ResearchVideoDetail> {
   const key = `${id}:${force ? '1' : '0'}`
   const existing = dissectInflight.get(key)
@@ -604,7 +604,7 @@ async function runDissectVideo(
   tikhub: TikHubService,
   id: string,
   force = false,
-  hooks?: { onProgress?: (event: ResearchProgressEvent) => void },
+  hooks?: { onProgress?: (event: ResearchProgressEvent) => void; signal?: AbortSignal },
 ): Promise<ResearchVideoDetail> {
   let source = research.getVideoSource(id)
   const awemeId = source.awemeId?.trim() || ''
@@ -653,6 +653,7 @@ async function runDissectVideo(
 
     const transcript = await media.transcribeAweme(awemeId, {
       researchVideoId: id,
+      signal: hooks?.signal,
       onProgress: (message, percent) => {
         progress('transcribing', message, percent)
       },

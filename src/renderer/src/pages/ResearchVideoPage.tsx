@@ -163,7 +163,10 @@ export function ResearchVideoPage({ videoId }: { videoId: string }) {
     const key = researchDissectDedupeKey(videoId)
     const finishedToastKeys = new Set<string>()
 
-    const syncFromJobs = (list: StudioJob[], justFinished: { id: string; status: 'succeeded' | 'failed' }[] = []) => {
+    const syncFromJobs = (
+      list: StudioJob[],
+      justFinished: { id: string; status: 'succeeded' | 'failed' | 'cancelled' }[] = [],
+    ) => {
       const related = list.filter((job) => job.dedupeKey === key)
       const active = related.find((job) => job.status === 'queued' || job.status === 'running')
       if (active) {

@@ -8,6 +8,7 @@ import { AccountPanel } from './AccountPanel'
 import { BackupPanel } from './BackupPanel'
 import { CleanupPanel } from './CleanupPanel'
 import { ModelPanel } from './ModelPanel'
+import { NetworkPanel } from './NetworkPanel'
 import { TikHubPanel } from './TikHubPanel'
 import { UsagePanel } from './UsagePanel'
 
@@ -25,6 +26,8 @@ function SettingsPanel({ href }: { href: SettingsHref }) {
       return <ModelPanel />
     case '/settings/tikhub':
       return <TikHubPanel />
+    case '/settings/network':
+      return <NetworkPanel />
     case '/settings/backup':
       return <BackupPanel />
     case '/settings/cleanup':

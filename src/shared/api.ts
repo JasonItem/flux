@@ -2,6 +2,7 @@ import type { AccountAnalysisApi } from './accountAnalysis'
 import type { BackupApi } from './backup'
 import type { CleanupApi } from './cleanup'
 import type { LlmApi } from './llm'
+import type { NetworkApi } from './network'
 import type { TikHubApi } from './tikhub'
 import type { JobsApi } from './jobs'
 import type { MediaApi } from './media'
@@ -199,6 +200,17 @@ export interface WindowControlsApi {
   shell?: WindowShellInfo
 }
 
+export type {
+  NetworkApi,
+  NetworkDepsInstallInput,
+  NetworkDepsProgressEvent,
+  NetworkProxySettings,
+  NetworkProxyUpdateInput,
+  WhisperDepKey,
+  WhisperDepsStatus,
+} from './network'
+export { NetworkChannels } from './network'
+
 export interface StudioApi {
   getDatabaseStatus: () => Promise<DatabaseStatus>
   window: WindowControlsApi
@@ -214,4 +226,5 @@ export interface StudioApi {
   radar: RadarApi
   backup: BackupApi
   cleanup: CleanupApi
+  network: NetworkApi
 }

@@ -51,7 +51,7 @@ export interface JobEnqueueInput {
 export interface JobsChangedEvent {
   jobs: StudioJob[]
   /** Job ids that newly entered a terminal state since last emit (for toasts) */
-  justFinished: Array<{ id: string; status: 'succeeded' | 'failed' }>
+  justFinished: Array<{ id: string; status: 'succeeded' | 'failed' | 'cancelled' }>
 }
 
 export interface JobsApi {

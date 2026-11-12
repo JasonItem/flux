@@ -13,7 +13,11 @@ import {
   TrackChannels,
   WindowChannels,
   WorkshopChannels,
+  NetworkChannels,
   type CleanupUsageKeepDays,
+  type NetworkDepsInstallInput,
+  type NetworkProxyUpdateInput,
+  type WhisperDepKey,
   type DouyinAccountPreview,
   type LlmChatInput,
   type LlmModelCreateInput,
@@ -35,6 +39,7 @@ import {
 } from '../shared/api'
 import { JobChannels, type JobsChangedEvent } from '../shared/jobs'
 import { MediaChannels, type MediaProgressEvent } from '../shared/media'
+import type { NetworkDepsProgressEvent } from '../shared/network'
 import type { ResearchProgressEvent } from '../shared/research'
 
 const windowShell = {
@@ -265,6 +270,24 @@ const api: StudioApi = {
     clearAnalysisCache: () => ipcRenderer.invoke(CleanupChannels.clearAnalysisCache),
     clearMediaCache: () => ipcRenderer.invoke(CleanupChannels.clearMediaCache),
     clearSqliteData: () => ipcRenderer.invoke(CleanupChannels.clearSqliteData),
+  },
+  network: {
+    getProxy: () => ipcRenderer.invoke(NetworkChannels.getProxy),
+    updateProxy: (input: NetworkProxyUpdateInput) =>
+      ipcRenderer.invoke(NetworkChannels.updateProxy, input),
+    getDepsStatus: () => ipcRenderer.invoke(NetworkChannels.getDepsStatus),
+    installDeps: (input?: NetworkDepsInstallInput) =>
+      ipcRenderer.invoke(NetworkChannels.installDeps, input),
+    removeDep: (key: WhisperDepKey) => ipcRenderer.invoke(NetworkChannels.removeDep, key),
+    onDepsProgress: (callback) => {
+      const listener = (_event: IpcRendererEvent, payload: NetworkDepsProgressEvent) => {
+        callback(payload)
+      }
+      ipcRenderer.on(NetworkChannels.depsProgress, listener)
+      return () => {
+        ipcRenderer.removeListener(NetworkChannels.depsProgress, listener)
+      }
+    },
   },
 }
 

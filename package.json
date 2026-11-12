@@ -1,6 +1,6 @@
 {
   "name": "studio",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Flux — 面向抖音创作者的 AI 自媒体工作台（赛道自测、内容雷达、样本拆解、账号画像）",
   "productName": "Flux",
   "author": "Flux contributors",

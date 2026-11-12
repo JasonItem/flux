@@ -25,6 +25,7 @@ export interface MediaService {
     options?: {
       researchVideoId?: string
       onProgress?: (message: string, percent?: number) => void
+      signal?: AbortSignal
     },
   ) => Promise<TranscriptResult>
   mediaRootDir: () => string
@@ -141,6 +142,7 @@ export function createMediaService(input: {
       const result = await transcribeLocalVideo({
         awemeId: id,
         videoPath: ensured.localPath,
+        signal: options.signal,
         onProgress: (message, percent) => {
           const phase =
             message.includes('Whisper') || message.includes('模型') || message.includes('引擎')

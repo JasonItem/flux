@@ -14,8 +14,12 @@ import {
   TopicChannels,
   TrackChannels,
   RadarChannels,
+  NetworkChannels,
   WindowChannels,
   type CleanupUsageKeepDays,
+  type NetworkDepsInstallInput,
+  type NetworkProxyUpdateInput,
+  type WhisperDepKey,
   type DatabaseStatus,
   type DouyinAccountPreview,
   type LlmChatInput,
@@ -44,6 +48,12 @@ import { createResearchService, type ResearchService } from './research/service'
 import { createTopicService, type TopicService } from './topic/service'
 import { createTrackService, type TrackService } from './track/service'
 import { createMediaService, type MediaService } from './media/service'
+import { getWhisperDepsStatus, installWhisperDeps, removeWhisperDep } from './media/asr'
+import {
+  loadAndApplyProxySettings,
+  readProxySettings,
+  updateAndApplyProxySettings,
+} from './network/proxyStore'
 import {
   registerFluxMediaProtocol,
   registerFluxMediaSchemePrivileged,
@@ -829,6 +839,39 @@ function registerBackupIpc(): void {
   )
 }
 
+function registerNetworkIpc(): void {
+  ipcMain.handle(
+    NetworkChannels.getProxy,
+    wrapInvoke(() => readProxySettings()),
+  )
+  ipcMain.handle(
+    NetworkChannels.updateProxy,
+    wrapInvoke((_event, input: NetworkProxyUpdateInput) => updateAndApplyProxySettings(input)),
+  )
+  ipcMain.handle(
+    NetworkChannels.getDepsStatus,
+    wrapInvoke(() => getWhisperDepsStatus()),
+  )
+  ipcMain.handle(
+    NetworkChannels.installDeps,
+    wrapInvoke(async (event, input?: NetworkDepsInstallInput) => {
+      return installWhisperDeps(
+        (message, percent) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send(NetworkChannels.depsProgress, { message, percent })
+          }
+        },
+        undefined,
+        input,
+      )
+    }),
+  )
+  ipcMain.handle(
+    NetworkChannels.removeDep,
+    wrapInvoke((_event, key: WhisperDepKey) => removeWhisperDep(key)),
+  )
+}
+
 app.setName('Flux')
 
 if (process.platform !== 'darwin') {
@@ -836,6 +879,12 @@ if (process.platform !== 'darwin') {
 }
 
 void app.whenReady().then(async () => {
+  try {
+    await loadAndApplyProxySettings()
+  } catch (error) {
+    console.warn('[studio] proxy apply failed', error)
+  }
+
   await ensureLocalMediaServer()
   registerFluxMediaProtocol()
 
@@ -891,6 +940,7 @@ void app.whenReady().then(async () => {
   registerRadarIpc()
   registerCleanupIpc()
   registerBackupIpc()
+  registerNetworkIpc()
 
   ipcMain.on(WindowChannels.minimize, (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize()
