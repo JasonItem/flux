@@ -345,6 +345,13 @@ function resolveAppIcon(): string {
   return join(app.getAppPath(), 'resources', 'icon.png')
 }
 
+function resolveWindowShell(): import('../shared/api').WindowShellInfo {
+  return {
+    platform: process.platform,
+    glass: false,
+  }
+}
+
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 1200,
@@ -357,7 +364,10 @@ function createWindow(): void {
     title: 'Flux',
     icon: resolveAppIcon(),
     autoHideMenuBar: true,
+    hasShadow: true,
+    roundedCorners: true,
     backgroundColor: '#f4f4f5',
+    thickFrame: process.platform === 'win32',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -900,6 +910,8 @@ void app.whenReady().then(async () => {
     const target = BrowserWindow.fromWebContents(event.sender)
     return target ? isEffectivelyMaximized(target) : false
   })
+
+  ipcMain.handle(WindowChannels.getShell, () => resolveWindowShell())
 
   createWindow()
 
