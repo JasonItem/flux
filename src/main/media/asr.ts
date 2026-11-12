@@ -22,13 +22,13 @@ import extractZip from 'extract-zip'
 
 import { audioFilePath, isUsableMediaFile, whisperRootDir } from './paths'
 
-/** Official Windows zip; macOS prebuilds from bizenlabs (whisper.cpp has no mac CLI zips). */
+/** Official Windows zip; macOS prebuilds (whisper.cpp has no official mac CLI zips). */
 const WHISPER_WIN_ZIP =
   'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip'
 const WHISPER_MAC_ARM64_ZIP =
-  'https://github.com/bizenlabs/whisper-cpp-macos-bin/releases/download/v1.8.2-2/whisper-cpp-v1.8.2-macos-arm64-metal.zip'
+  'https://github.com/bizenlabs-old/whisper-cpp-macos-bin/releases/download/v1.8.2-2/whisper-cpp-v1.8.2-macos-arm64-metal.zip'
 const WHISPER_MAC_X64_ZIP =
-  'https://github.com/bizenlabs/whisper-cpp-macos-bin/releases/download/v1.8.2-2/whisper-cpp-v1.8.2-macos-x86_64-accelerate.zip'
+  'https://github.com/bizenlabs-old/whisper-cpp-macos-bin/releases/download/v1.8.2-2/whisper-cpp-v1.8.2-macos-x86_64-accelerate.zip'
 
 export interface TranscriptCue {
   startSec: number
@@ -54,13 +54,35 @@ async function clearMacQuarantine(target: string): Promise<void> {
   }
 }
 
+function isExecutableFile(path: string): boolean {
+  try {
+    return existsSync(path) && statSync(path).isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * ffmpeg-static 在 asar 内 require 出来的路径仍带 `app.asar/`，
+ * 真实二进制在 `app.asar.unpacked/`；直接 spawn asar 路径会报 ENOTDIR。
+ */
+function resolveUnpackedBinary(candidate: string): string {
+  if (candidate.includes('app.asar.unpacked')) return candidate
+  if (!candidate.includes('app.asar')) return candidate
+  return candidate.replace('app.asar', 'app.asar.unpacked')
+}
+
 function ffmpegBinary(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ffmpegStatic = require('ffmpeg-static') as string | null
-  if (!ffmpegStatic || !existsSync(ffmpegStatic)) {
+  if (!ffmpegStatic) {
     throw new Error('未找到 ffmpeg-static，请重新安装依赖')
   }
-  return ffmpegStatic
+  const resolved = resolveUnpackedBinary(ffmpegStatic)
+  if (!isExecutableFile(resolved)) {
+    throw new Error(`未找到 ffmpeg 可执行文件：${resolved}`)
+  }
+  return resolved
 }
 
 function whisperCliName(): string {
@@ -76,7 +98,7 @@ function whisperCliPath(): string {
     join(root, 'Release', process.platform === 'win32' ? 'main.exe' : 'main'),
   ]
   for (const candidate of preferred) {
-    if (existsSync(candidate)) return candidate
+    if (isExecutableFile(candidate)) return candidate
   }
   return join(root, name)
 }
@@ -172,7 +194,7 @@ function bundledWhisperCandidate(): string | null {
       join(app.getAppPath(), 'resources', 'whisper', name),
     ]
     for (const candidate of roots) {
-      if (existsSync(candidate)) return candidate
+      if (isExecutableFile(candidate)) return candidate
     }
   } catch {
     // ignore
@@ -200,13 +222,13 @@ async function installWhisperBinary(
   onProgress?: (message: string, percent?: number) => void,
 ): Promise<string> {
   const cli = whisperCliPath()
-  if (existsSync(cli)) {
+  if (isExecutableFile(cli)) {
     await clearMacQuarantine(cli)
     return cli
   }
 
   const bundled = bundledWhisperCandidate()
-  if (bundled) {
+  if (bundled && isExecutableFile(bundled)) {
     mkdirSync(dirname(cli), { recursive: true })
     copyFileSync(bundled, cli)
     if (process.platform !== 'win32') await chmod(cli, 0o755)
@@ -215,7 +237,7 @@ async function installWhisperBinary(
   }
 
   for (const candidate of systemWhisperCandidates()) {
-    if (existsSync(candidate)) return candidate
+    if (isExecutableFile(candidate)) return candidate
   }
 
   // Prefer system-installed whisper-cli if present on PATH
@@ -226,7 +248,7 @@ async function installWhisperBinary(
       .split(/\r?\n/)
       .map((s) => s.trim())
       .find(Boolean)
-    if (line && existsSync(line)) return line
+    if (line && isExecutableFile(line)) return line
   } catch {
     // continue to download
   }
@@ -265,7 +287,10 @@ async function ensureWhisperBinary(
   onProgress?: (message: string, percent?: number) => void,
 ): Promise<string> {
   const cli = whisperCliPath()
-  if (existsSync(cli)) return cli
+  if (isExecutableFile(cli)) {
+    await clearMacQuarantine(cli)
+    return cli
+  }
   if (!whisperBinaryLock) {
     whisperBinaryLock = installWhisperBinary(onProgress).finally(() => {
       whisperBinaryLock = null
