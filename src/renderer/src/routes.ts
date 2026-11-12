@@ -13,6 +13,7 @@ export const settingsHrefs = [
   '/settings/accounts',
   '/settings/models',
   '/settings/tikhub',
+  '/settings/network',
   '/settings/backup',
   '/settings/cleanup',
   '/settings/usage',

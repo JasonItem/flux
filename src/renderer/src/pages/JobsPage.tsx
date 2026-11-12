@@ -253,15 +253,29 @@ export function JobsPage() {
                             </Text>
                           </details>
                         </div>
-                        {job.href ? (
+                        <Flexbox gap={4} horizontal>
+                          {job.href ? (
+                            <Button
+                              size="small"
+                              type="primary"
+                              onClick={() => navigate(job.href as AppPath)}
+                            >
+                              查看
+                            </Button>
+                          ) : null}
                           <Button
+                            danger
+                            icon={Square}
+                            loading={busyId === job.id}
                             size="small"
-                            type="primary"
-                            onClick={() => navigate(job.href as AppPath)}
+                            type="text"
+                            onClick={() => {
+                              void cancel(job.id)
+                            }}
                           >
-                            查看
+                            取消
                           </Button>
-                        ) : null}
+                        </Flexbox>
                       </div>
                     </div>
                   )

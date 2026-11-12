@@ -70,6 +70,7 @@ export function createJobService(input: {
 
   let pumping = false
   let currentJobId: string | null = null
+  let currentAbort: AbortController | null = null
   const justFinished: JobsChangedEvent['justFinished'] = []
 
   const emitChanged = (finished?: JobsChangedEvent['justFinished']) => {
@@ -78,8 +79,18 @@ export function createJobService(input: {
     broadcast({ jobs: jobs.list(), justFinished: batch })
   }
 
+  const isAbortError = (error: unknown): boolean =>
+    Boolean(
+      error &&
+        typeof error === 'object' &&
+        'name' in error &&
+        (error as { name?: string }).name === 'AbortError',
+    )
+
   const runOne = async (job: StudioJob): Promise<void> => {
     currentJobId = job.id
+    currentAbort = new AbortController()
+    const signal = currentAbort.signal
     jobs.update(job.id, {
       status: 'running',
       phase: 'idle',
@@ -96,7 +107,9 @@ export function createJobService(input: {
         if (!videoId) throw new Error('缺少 videoId')
         const force = Boolean(job.payload.force)
         await getResearch().runDissect(videoId, force, {
+          signal,
           onProgress: (event) => {
+            if (signal.aborted) return
             jobs.update(job.id, {
               phase: mapResearchPhase(String(event.phase), event.message),
               message: event.message,
@@ -125,6 +138,7 @@ export function createJobService(input: {
         if (!workshop) throw new Error('创作工坊服务未就绪')
         await workshop.runReplicate(researchVideoId, scriptId || undefined, {
           onProgress: (event) => {
+            if (signal.aborted) return
             jobs.update(job.id, {
               phase: event.phase === 'analyzing' ? 'analyzing' : mapResearchPhase(event.phase),
               message: event.message,
@@ -137,6 +151,10 @@ export function createJobService(input: {
         throw new Error(`未知任务类型：${String(job.kind)}`)
       }
 
+      if (signal.aborted) {
+        throw Object.assign(new Error('已取消'), { name: 'AbortError' })
+      }
+
       jobs.update(job.id, {
         status: 'succeeded',
         phase: 'ready',
@@ -147,17 +165,29 @@ export function createJobService(input: {
       })
       emitChanged([{ id: job.id, status: 'succeeded' }])
     } catch (error) {
-      const message = error instanceof Error ? error.message : '任务失败'
-      jobs.update(job.id, {
-        status: 'failed',
-        phase: 'error',
-        message,
-        error: message,
-        finishedAt: new Date().toISOString(),
-      })
-      emitChanged([{ id: job.id, status: 'failed' }])
+      if (isAbortError(error) || signal.aborted) {
+        jobs.update(job.id, {
+          status: 'cancelled',
+          phase: 'idle',
+          message: '已取消',
+          error: null,
+          finishedAt: new Date().toISOString(),
+        })
+        emitChanged([{ id: job.id, status: 'cancelled' }])
+      } else {
+        const message = error instanceof Error ? error.message : '任务失败'
+        jobs.update(job.id, {
+          status: 'failed',
+          phase: 'error',
+          message,
+          error: message,
+          finishedAt: new Date().toISOString(),
+        })
+        emitChanged([{ id: job.id, status: 'failed' }])
+      }
     } finally {
       currentJobId = null
+      currentAbort = null
     }
   }
 
@@ -195,15 +225,26 @@ export function createJobService(input: {
     cancel: (id) => {
       const current = jobs.get(id)
       if (!current) return null
-      if (current.status !== 'queued') return current
-      const updated = jobs.update(id, {
-        status: 'cancelled',
-        phase: 'idle',
-        message: '已取消',
-        finishedAt: new Date().toISOString(),
-      })
-      emitChanged()
-      return updated
+      if (current.status === 'queued') {
+        const updated = jobs.update(id, {
+          status: 'cancelled',
+          phase: 'idle',
+          message: '已取消',
+          finishedAt: new Date().toISOString(),
+        })
+        emitChanged()
+        return updated
+      }
+      // 运行中：中断下载 / 转写；状态由 runOne 的 AbortError 分支落库
+      if (current.status === 'running' && currentJobId === id) {
+        currentAbort?.abort()
+        const updated = jobs.update(id, {
+          message: '正在取消…',
+        })
+        emitChanged()
+        return updated
+      }
+      return current
     },
 
     clearFinished: () => {

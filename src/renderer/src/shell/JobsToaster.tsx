@@ -20,6 +20,11 @@ export function JobsToaster() {
             title: '任务完成',
             description: `${job.title} · 可在「任务队列」查看结果`,
           })
+        } else if (item.status === 'cancelled') {
+          toast.info({
+            title: '任务已取消',
+            description: job.title,
+          })
         } else {
           toast.error({
             title: '任务失败',

@@ -8,6 +8,7 @@ import {
   KeyRound,
   LayoutDashboard,
   ListTodo,
+  Network,
   PenLine,
   Radar,
   ScrollText,
@@ -119,6 +120,12 @@ export const settingsNav: readonly SettingsNavItem[] = [
     label: 'TikHub配置',
     description: '配置 TikHub API，用于拉取抖音账号资料与作品数据。',
     icon: KeyRound,
+  },
+  {
+    href: '/settings/network',
+    label: '网络与依赖',
+    description: '配置下载代理，检测并预下载 Whisper / FFmpeg 拆解依赖。',
+    icon: Network,
   },
   {
     href: '/settings/backup',
