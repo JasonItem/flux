@@ -37,9 +37,15 @@ import { JobChannels, type JobsChangedEvent } from '../shared/jobs'
 import { MediaChannels, type MediaProgressEvent } from '../shared/media'
 import type { ResearchProgressEvent } from '../shared/research'
 
+const windowShell = {
+  platform: process.platform,
+  glass: false,
+}
+
 const api: StudioApi = {
   getDatabaseStatus: () => ipcRenderer.invoke(DatabaseStatusChannel),
   window: {
+    shell: windowShell,
     minimize: () => {
       ipcRenderer.send(WindowChannels.minimize)
     },
@@ -50,6 +56,7 @@ const api: StudioApi = {
       ipcRenderer.send(WindowChannels.close)
     },
     isMaximized: () => ipcRenderer.invoke(WindowChannels.isMaximized),
+    getShell: () => ipcRenderer.invoke(WindowChannels.getShell),
     onMaximizedChange: (callback) => {
       const listener = (_event: IpcRendererEvent, maximized: boolean) => {
         callback(maximized)

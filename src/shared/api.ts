@@ -171,7 +171,14 @@ export const WindowChannels = {
   close: 'window:close',
   isMaximized: 'window:is-maximized',
   maximizedChanged: 'window:maximized-changed',
+  getShell: 'window:get-shell',
 } as const
+
+export interface WindowShellInfo {
+  platform: 'darwin' | 'win32' | 'linux' | string
+  /** 是否启用系统毛玻璃（macOS Vibrancy / Windows Acrylic） */
+  glass: boolean
+}
 
 export interface DatabaseStatus {
   ready: boolean
@@ -187,6 +194,9 @@ export interface WindowControlsApi {
   close: () => void
   isMaximized: () => Promise<boolean>
   onMaximizedChange: (callback: (maximized: boolean) => void) => () => void
+  getShell: () => Promise<WindowShellInfo>
+  /** preload 同步注入，便于首屏立刻套上透明壳 */
+  shell?: WindowShellInfo
 }
 
 export interface StudioApi {

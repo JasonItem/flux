@@ -3,6 +3,48 @@
   height: 100dvh;
 }
 
+/* LOGO 区与顶部导航栏对齐：同高，并跟上圆角内容卡的 10px 顶边距 */
+.lobe-dashboard-console-shell__brand,
+.lobe-dashboard-console-shell__topbar {
+  box-sizing: border-box;
+  height: 56px !important;
+  min-height: 56px !important;
+  max-height: 56px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.lobe-dashboard-console-shell__brand {
+  margin-top: 10px !important;
+  padding-block: 0 !important;
+  /* 右侧与 ConsoleNav（padding-inline: 8px）对齐，主题按钮贴齐菜单右缘 */
+  padding-inline-end: 8px !important;
+}
+
+.lobe-dashboard-console-shell__topbar {
+  margin-top: 0 !important;
+}
+
+/* 右侧内容区：实色圆角矩形包裹 */
+.lobe-dashboard-console-shell__workspace {
+  margin: 10px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--lobe-color-bg-container, #ffffff) !important;
+  border: 1px solid color-mix(in srgb, var(--lobe-color-border, #000) 10%, transparent);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] .lobe-dashboard-console-shell__workspace {
+  background: var(--lobe-color-bg-container, #1a1a1a) !important;
+  border-color: color-mix(in srgb, #fff 8%, transparent);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+}
+
+.lobe-dashboard-console-shell__topbar {
+  border-bottom: none !important;
+}
+
 .lobe-dashboard-console-shell__topbar,
 .lobe-dashboard-console-shell__brand {
   -webkit-app-region: drag;

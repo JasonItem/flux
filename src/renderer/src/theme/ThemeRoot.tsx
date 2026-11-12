@@ -29,6 +29,9 @@ function applyMode(mode: AuthThemeMode): void {
     neutralColor: undefined,
     primaryColor: undefined,
   })
+
+  // 同步到 html，供壳层 / 品牌等 CSS 按明暗切换
+  document.documentElement.dataset.theme = appearance
 }
 
 function modeIcon(mode: AuthThemeMode) {
