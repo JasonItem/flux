@@ -38,29 +38,29 @@ Flux 帮助你把「账号理解 → 赛道判断 → 内容监听 → 选题沉
 
 ## 软件截图
 
-### 内容雷达
+### 工作台
 
-监听对标账号与平台热榜，按「全部 / 高表现 / 新作 / 平台热榜」筛选，并可直接拆解。
+汇总选题、自测、拆解进度与近作表现，一眼看到下一步该做什么。
 
-![内容雷达](docs/screenshots/radar.png)
-
-监听规则可配置高表现阈值、新作窗口、热榜关键词与自动同步。
-
-![监听规则](docs/screenshots/radar-rules.png)
+![工作台](docs/screenshots/workbench.png)
 
 ### 赛道自测
 
-结合账号成分与抖音搜索样本，推荐细分赛道并一键添加选题。
+分析账号成分，推荐细分赛道，并一键添加选题。
 
 ![赛道自测](docs/screenshots/track.png)
 
 ### 样本拆解
 
-按选题筛选样本，下载到本地播放；转写原文后由大模型拆结构、剪辑与文案。
+本地下载播放样本视频，转写原文后由大模型拆结构、剪辑与文案。
 
-![样本拆解详情](docs/screenshots/dissect.png)
+![样本拆解](docs/screenshots/dissect.png)
 
-![样本播放与转写](docs/screenshots/dissect-player.png)
+### 创作工坊
+
+根据拆解思路生成可拍口播脚本，分段编辑与复用。
+
+![创作工坊](docs/screenshots/workshop.png)
 
 ---
 
