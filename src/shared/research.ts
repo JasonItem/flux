@@ -158,6 +158,11 @@ export interface ResearchDissectByUrlInput {
   topicId?: string | null
   /** 已存在时是否强制重新拆解 */
   force?: boolean
+  /**
+   * custom：出现在「自定义拆解」列表；
+   * records：不进样本/自定义列表，完成后只出现在「拆解记录」（内容雷达用）
+   */
+  destination?: 'custom' | 'records'
 }
 
 export interface ResearchDissectByUrlResult {

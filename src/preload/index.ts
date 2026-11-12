@@ -2,10 +2,12 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 
 import {
   AccountAnalysisChannels,
+  BackupChannels,
   CleanupChannels,
   DatabaseStatusChannel,
   LlmChannels,
   TikHubChannels,
+  RadarChannels,
   ResearchChannels,
   TopicChannels,
   TrackChannels,
@@ -22,6 +24,8 @@ import {
   type LlmStreamEndEvent,
   type LlmStreamErrorEvent,
   type LlmStreamHandlers,
+  type RadarRulesUpdateInput,
+  type RadarSignalsQuery,
   type StudioApi,
   type TikHubSettingsUpdateInput,
   type TopicManualInput,
@@ -226,6 +230,26 @@ const api: StudioApi = {
     refreshVideoAnalysis: (accountId: string, awemeId: string) =>
       ipcRenderer.invoke(AccountAnalysisChannels.refreshVideoAnalysis, accountId, awemeId),
   },
+  radar: {
+    listAccounts: () => ipcRenderer.invoke(RadarChannels.listAccounts),
+    addAccount: (input: string) => ipcRenderer.invoke(RadarChannels.addAccount, input),
+    removeAccount: (id: string) => ipcRenderer.invoke(RadarChannels.removeAccount, id),
+    setAccountEnabled: (id: string, enabled: boolean) =>
+      ipcRenderer.invoke(RadarChannels.setAccountEnabled, id, enabled),
+    syncAccount: (id: string) => ipcRenderer.invoke(RadarChannels.syncAccount, id),
+    syncAllAccounts: () => ipcRenderer.invoke(RadarChannels.syncAllAccounts),
+    listSignals: (query?: RadarSignalsQuery) =>
+      ipcRenderer.invoke(RadarChannels.listSignals, query),
+    refreshHot: () => ipcRenderer.invoke(RadarChannels.refreshHot),
+    getRules: () => ipcRenderer.invoke(RadarChannels.getRules),
+    updateRules: (input: RadarRulesUpdateInput) =>
+      ipcRenderer.invoke(RadarChannels.updateRules, input),
+  },
+  backup: {
+    getStatus: () => ipcRenderer.invoke(BackupChannels.getStatus),
+    exportDatabase: () => ipcRenderer.invoke(BackupChannels.exportDatabase),
+    importDatabase: () => ipcRenderer.invoke(BackupChannels.importDatabase),
+  },
   cleanup: {
     getStatus: () => ipcRenderer.invoke(CleanupChannels.getStatus),
     clearElectronCache: () => ipcRenderer.invoke(CleanupChannels.clearElectronCache),
@@ -233,6 +257,7 @@ const api: StudioApi = {
       ipcRenderer.invoke(CleanupChannels.clearUsageLogs, keepDays),
     clearAnalysisCache: () => ipcRenderer.invoke(CleanupChannels.clearAnalysisCache),
     clearMediaCache: () => ipcRenderer.invoke(CleanupChannels.clearMediaCache),
+    clearSqliteData: () => ipcRenderer.invoke(CleanupChannels.clearSqliteData),
   },
 }
 

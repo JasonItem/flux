@@ -4,10 +4,14 @@ import {
   ChartColumn,
   Clapperboard,
   Compass,
+  HardDriveDownload,
   KeyRound,
   LayoutDashboard,
+  ListTodo,
   PenLine,
+  Radar,
   ScrollText,
+  Settings,
   Trash2,
   Users,
 } from 'lucide-react'
@@ -48,6 +52,14 @@ export const mainNav: readonly MainNavItem[] = [
     icon: Compass,
   },
   {
+    href: '/radar',
+    label: '内容雷达',
+    description: '监听对标账号作品，按高表现、新作与热榜筛选信号。',
+    emptyTitle: '还没有雷达信号',
+    emptyDescription: '添加对标账号并同步后，作品会出现在这里。',
+    icon: Radar,
+  },
+  {
     href: '/research',
     label: '样本拆解',
     description: '选定选题后筛选样本视频，做文案、结构与评论拆解。',
@@ -71,6 +83,22 @@ export const mainNav: readonly MainNavItem[] = [
     emptyDescription: '选择已绑定账号并开始分析后，结果会显示在这里。',
     icon: ChartColumn,
   },
+  {
+    href: '/jobs',
+    label: '任务队列',
+    description: '管理后台拆解、下载与复刻任务，查看进度与结果。',
+    emptyTitle: '暂无任务',
+    emptyDescription: '样本拆解、下载与复刻脚本会显示在这里。',
+    icon: ListTodo,
+  },
+  {
+    href: '/settings',
+    label: '系统设置',
+    description: '账号、模型、TikHub、备份与本地数据管理。',
+    emptyTitle: '系统设置',
+    emptyDescription: '配置应用环境与本地数据。',
+    icon: Settings,
+  },
 ]
 
 export const settingsNav: readonly SettingsNavItem[] = [
@@ -93,9 +121,15 @@ export const settingsNav: readonly SettingsNavItem[] = [
     icon: KeyRound,
   },
   {
+    href: '/settings/backup',
+    label: '数据备份',
+    description: '导出或导入本地数据库，方便更换电脑时迁移账号、拆解与配置。',
+    icon: HardDriveDownload,
+  },
+  {
     href: '/settings/cleanup',
     label: '本地数据清理',
-    description: '分项清理运行缓存、过期用量日志与可重建分析缓存。',
+    description: '一键清空 SQLite，并分项清理运行缓存与可重建数据。',
     icon: Trash2,
   },
   {

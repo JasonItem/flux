@@ -348,4 +348,83 @@ export const migrations: readonly Migration[] = [
         ON research_videos(source, updated_at DESC);
     `,
   },
+  {
+    id: 15,
+    name: '0015_content_radar',
+    sql: `
+      CREATE TABLE IF NOT EXISTS radar_accounts (
+        id TEXT PRIMARY KEY,
+        sec_user_id TEXT NOT NULL UNIQUE,
+        uid TEXT,
+        unique_id TEXT,
+        nickname TEXT NOT NULL,
+        avatar_url TEXT,
+        signature TEXT,
+        follower_count INTEGER NOT NULL DEFAULT 0,
+        aweme_count INTEGER NOT NULL DEFAULT 0,
+        profile_url TEXT,
+        source_input TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        last_synced_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_radar_accounts_updated
+        ON radar_accounts(updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS radar_works (
+        id TEXT PRIMARY KEY,
+        aweme_id TEXT NOT NULL UNIQUE,
+        radar_account_id TEXT,
+        author_nickname TEXT NOT NULL DEFAULT '',
+        author_unique_id TEXT,
+        title TEXT NOT NULL DEFAULT '',
+        cover_url TEXT,
+        play_url TEXT,
+        profile_url TEXT,
+        digg_count INTEGER NOT NULL DEFAULT 0,
+        comment_count INTEGER NOT NULL DEFAULT 0,
+        share_count INTEGER NOT NULL DEFAULT 0,
+        play_count INTEGER NOT NULL DEFAULT 0,
+        duration_sec INTEGER NOT NULL DEFAULT 0,
+        publish_at TEXT,
+        is_high INTEGER NOT NULL DEFAULT 0,
+        is_new INTEGER NOT NULL DEFAULT 0,
+        is_hot INTEGER NOT NULL DEFAULT 0,
+        source TEXT NOT NULL DEFAULT 'account',
+        first_seen_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (radar_account_id) REFERENCES radar_accounts(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_radar_works_updated
+        ON radar_works(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_radar_works_flags
+        ON radar_works(is_high, is_new, is_hot, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_radar_works_account
+        ON radar_works(radar_account_id, publish_at DESC);
+
+      CREATE TABLE IF NOT EXISTS radar_rules (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        high_min_digg INTEGER NOT NULL DEFAULT 10000,
+        high_min_play INTEGER NOT NULL DEFAULT 0,
+        new_within_hours INTEGER NOT NULL DEFAULT 72,
+        hot_keywords TEXT NOT NULL DEFAULT '',
+        auto_sync_enabled INTEGER NOT NULL DEFAULT 0,
+        sync_interval_minutes INTEGER NOT NULL DEFAULT 120,
+        updated_at TEXT NOT NULL
+      );
+
+      INSERT INTO radar_rules (
+        id, high_min_digg, high_min_play, new_within_hours, hot_keywords,
+        auto_sync_enabled, sync_interval_minutes, updated_at
+      )
+      VALUES (
+        1, 10000, 0, 72, '',
+        0, 120, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      )
+      ON CONFLICT(id) DO NOTHING;
+    `,
+  },
 ]

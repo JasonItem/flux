@@ -1,13 +1,23 @@
 import type { AccountAnalysisApi } from './accountAnalysis'
+import type { BackupApi } from './backup'
 import type { CleanupApi } from './cleanup'
 import type { LlmApi } from './llm'
 import type { TikHubApi } from './tikhub'
 import type { JobsApi } from './jobs'
 import type { MediaApi } from './media'
+import type { RadarApi } from './radar'
 import type { ResearchApi } from './research'
 import type { TopicApi } from './topic'
 import type { TrackApi } from './track'
 import type { WorkshopApi } from './workshop'
+
+export { BackupChannels } from './backup'
+export type {
+  BackupApi,
+  BackupExportResult,
+  BackupImportResult,
+  BackupStatus,
+} from './backup'
 
 export { CleanupChannels } from './cleanup'
 export type {
@@ -141,6 +151,18 @@ export type {
   AccountWorkCollection,
 } from './accountAnalysis'
 
+export { RadarChannels } from './radar'
+export type {
+  RadarAccount,
+  RadarApi,
+  RadarRules,
+  RadarRulesUpdateInput,
+  RadarSignalFilter,
+  RadarSignalsQuery,
+  RadarSyncResult,
+  RadarWork,
+} from './radar'
+
 export const DatabaseStatusChannel = 'db:status'
 
 export const WindowChannels = {
@@ -179,5 +201,7 @@ export interface StudioApi {
   media: MediaApi
   jobs: JobsApi
   accountAnalysis: AccountAnalysisApi
+  radar: RadarApi
+  backup: BackupApi
   cleanup: CleanupApi
 }

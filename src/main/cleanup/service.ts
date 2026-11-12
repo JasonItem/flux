@@ -11,6 +11,24 @@ import type {
   CleanupUsageKeepDays,
 } from '../../shared/cleanup'
 
+/** User tables wiped by「一键清空」; schema_migrations kept so schema stays valid. */
+const SQLITE_USER_TABLES = [
+  'workshop_scripts',
+  'studio_jobs',
+  'research_videos',
+  'topics',
+  'track_candidates',
+  'track_assessments',
+  'account_analyses',
+  'douyin_accounts',
+  'tikhub_usage',
+  'llm_usage',
+  'llm_models',
+  'llm_providers',
+  'tikhub_settings',
+  'app_meta',
+] as const
+
 const ELECTRON_CACHE_DIRS = [
   'Cache',
   'Code Cache',
@@ -28,6 +46,7 @@ export interface CleanupService {
   clearUsageLogs: (keepDays: CleanupUsageKeepDays) => CleanupActionResult
   clearAnalysisCache: () => CleanupActionResult
   clearMediaCache: () => CleanupActionResult
+  clearSqliteData: () => CleanupActionResult
 }
 
 function directoryBytes(root: string): number {
@@ -148,6 +167,7 @@ export function createCleanupService(input: {
   databasePath: string
   userDataPath: string
   session: Session
+  closeDatabase?: () => void
 }): CleanupService {
   const { db, databasePath, userDataPath, session } = input
 
@@ -383,6 +403,58 @@ export function createCleanupService(input: {
       return {
         freedBytes: Math.max(0, before.bytes - after.bytes),
         detail: `已删除本地视频缓存约 ${String(before.fileCount)} 个文件；下次播放/拆解会重新下载`,
+      }
+    },
+
+    clearSqliteData: () => {
+      const beforeBytes =
+        fileBytes(databasePath) +
+        fileBytes(`${databasePath}-wal`) +
+        fileBytes(`${databasePath}-shm`)
+
+      const existing = new Set(
+        (
+          db
+            .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+            .all() as Array<{ name: string }>
+        ).map((row) => row.name),
+      )
+
+      const wipe = db.transaction(() => {
+        db.exec('PRAGMA foreign_keys = OFF')
+        for (const table of SQLITE_USER_TABLES) {
+          if (!existing.has(table)) continue
+          db.exec(`DELETE FROM ${table}`)
+        }
+        // Re-seed required singleton settings row
+        if (existing.has('tikhub_settings')) {
+          db.exec(`
+            INSERT INTO tikhub_settings (id, endpoint, api_token, timeout_seconds, enabled, updated_at)
+            VALUES (1, 'https://api.tikhub.io', '', 30, 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            ON CONFLICT(id) DO NOTHING
+          `)
+        }
+        if (existing.has('app_meta')) {
+          db.exec(`
+            INSERT INTO app_meta (key, value)
+            VALUES ('created_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            ON CONFLICT(key) DO NOTHING
+          `)
+        }
+        db.exec('PRAGMA foreign_keys = ON')
+      })
+      wipe()
+      vacuum()
+
+      const afterBytes =
+        fileBytes(databasePath) +
+        fileBytes(`${databasePath}-wal`) +
+        fileBytes(`${databasePath}-shm`)
+
+      return {
+        freedBytes: Math.max(0, beforeBytes - afterBytes),
+        detail: '已清空账号、选题、拆解、脚本、赛道自测、模型配置与用量等业务数据；无需重启',
+        relaunching: false,
       }
     },
   }

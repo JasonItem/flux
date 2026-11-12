@@ -230,6 +230,13 @@ export function createResearchService(
     enqueueDissectByUrl: async (input) => {
       const url = input.url?.trim() || ''
       if (!url) throw new Error('请粘贴抖音视频链接')
+      const destination = input.destination === 'records' ? 'records' : 'custom'
+      const bucketTitle = destination === 'records' ? '内容雷达' : '自定义拆解'
+      const bucketSummary =
+        destination === 'records'
+          ? '内容雷达发起的拆解，完成后进入拆解记录'
+          : '通过粘贴视频链接添加的拆解任务'
+      const bucketReason = destination === 'records' ? '内容雷达拆解' : '自定义链接拆解'
 
       let topicId = input.topicId?.trim() || ''
       let topic = topicId ? topics.getById(topicId) : null
@@ -238,19 +245,23 @@ export function createResearchService(
         const account =
           accounts.find((item) => item.isActive) || accounts[0] || null
         if (!account) {
-          throw new Error('请先在设置里绑定抖音账号，再添加自定义拆解')
+          throw new Error(
+            destination === 'records'
+              ? '请先在设置里绑定抖音账号，再从内容雷达拆解'
+              : '请先在设置里绑定抖音账号，再添加自定义拆解',
+          )
         }
         const existing = topics
           .list(account.id)
-          .find((item) => item.title === '自定义拆解' && item.source === 'manual')
+          .find((item) => item.title === bucketTitle && item.source === 'manual')
         topic =
           existing ||
           topics.addManual({
             accountId: account.id,
-            title: '自定义拆解',
-            summary: '通过粘贴视频链接添加的拆解任务',
-            reason: '自定义链接拆解',
-            domain: '自定义',
+            title: bucketTitle,
+            summary: bucketSummary,
+            reason: bucketReason,
+            domain: destination === 'records' ? '雷达' : '自定义',
           })
         topicId = topic.id
       }
@@ -287,31 +298,44 @@ export function createResearchService(
         console.warn('[research] custom dissect meta empty', awemeId, fetchError)
       }
 
-      const video = research.upsertCustomVideo(topicId, topic.accountId, {
-        awemeId,
-        title,
-        authorNickname: one?.authorNickname || existed?.authorNickname || '未知作者',
-        authorUniqueId: one?.authorUniqueId || existed?.authorUniqueId || null,
-        coverUrl: one?.coverUrl || existed?.coverUrl || null,
-        playUrl: one?.playUrl || existed?.playUrl || null,
-        diggCount: one?.diggCount || existed?.diggCount || 0,
-        commentCount: one?.commentCount || existed?.commentCount || 0,
-        shareCount: one?.shareCount || existed?.shareCount || 0,
-        durationSec:
-          (one?.durationMs ? toDurationSec(one.durationMs) : 0) || existed?.durationSec || 45,
-        videoType: existed?.videoType || '口播',
-        matchScore: 100,
-        profileUrl:
-          one?.shareUrl ||
-          (awemeId ? `https://www.douyin.com/video/${awemeId}` : existed?.profileUrl || ''),
-        description: one?.description || title,
-        summary: '自定义链接拆解',
-        editingStyle: '',
-        scriptSegments: [],
-        structureBlocks: [],
-        comments: [],
-        takeaways: [],
-      })
+      let video: ResearchVideoSummary
+      if (destination === 'records' && existed) {
+        // 已有样本：不挪选题，只撤出样本列表并入队拆解
+        video = research.markVideoAsRecordOnly(existed.id)
+      } else {
+        video = research.upsertCustomVideo(
+          topicId,
+          topic.accountId,
+          {
+            awemeId,
+            title,
+            authorNickname: one?.authorNickname || existed?.authorNickname || '未知作者',
+            authorUniqueId: one?.authorUniqueId || existed?.authorUniqueId || null,
+            coverUrl: one?.coverUrl || existed?.coverUrl || null,
+            playUrl: one?.playUrl || existed?.playUrl || null,
+            diggCount: one?.diggCount || existed?.diggCount || 0,
+            commentCount: one?.commentCount || existed?.commentCount || 0,
+            shareCount: one?.shareCount || existed?.shareCount || 0,
+            durationSec:
+              (one?.durationMs ? toDurationSec(one.durationMs) : 0) || existed?.durationSec || 45,
+            videoType: existed?.videoType || '口播',
+            matchScore: 100,
+            profileUrl:
+              one?.shareUrl ||
+              (awemeId ? `https://www.douyin.com/video/${awemeId}` : existed?.profileUrl || ''),
+            description: one?.description || title,
+            summary: destination === 'records' ? '内容雷达拆解' : '自定义链接拆解',
+            editingStyle: '',
+            scriptSegments: [],
+            structureBlocks: [],
+            comments: [],
+            takeaways: [],
+          },
+          destination === 'records'
+            ? { source: 'radar', isCurrent: false }
+            : { source: 'custom', isCurrent: true },
+        )
+      }
 
       const force = Boolean(input.force) || !hasUsableDissect(research.getVideo(video.id))
       const job = enqueueDissectJob(jobs, research, video.id, force)
@@ -711,10 +735,7 @@ async function runDissectVideo(
       status: mediaReady ? 'ready' : 'error',
     })
     progress('error', message)
-    // Prefer returning playable detail over hard failure (ASR/network issues)
-    if (mediaReady) {
-      return research.getVideo(id)
-    }
+    // Persist error + local media, but fail the job so UI/queue show 拆解失败
     throw error
   }
 }

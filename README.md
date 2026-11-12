@@ -106,6 +106,20 @@ npm run dev
 - 向导式安装，**可选择安装目录**
 - 卸载时可勾选 **清除用户数据**（数据库 / 配置 / 缓存）
 
+### macOS 安装包说明
+
+当前 Release 的 DMG **未做 Apple 开发者签名 / 公证**。从浏览器下载后，系统会打上隔离标记，打开时可能提示「应用已损坏」——这是 Gatekeeper 拦截，不是安装包损坏。
+
+安装后在终端执行一次即可打开：
+
+```bash
+sudo xattr -rd com.apple.quarantine /Applications/Flux.app
+```
+
+若 App 不在 `/Applications`，把路径换成实际位置。之后可正常启动。
+
+要彻底去掉该提示，需加入 [Apple Developer Program](https://developer.apple.com/)，配置 Developer ID 证书并公证（见下方 Actions Secrets）。
+
 ---
 
 ## GitHub Actions（云端打 DMG）
@@ -117,7 +131,7 @@ npm run dev
 
 产物会上传到该次 workflow 的 Artifacts；若由 tag 触发，还会挂到 GitHub Release。
 
-macOS 默认 **不签名**（`CSC_IDENTITY_AUTO_DISCOVERY=false`）。若要公证分发，请自行配置 Apple 证书相关 Secrets（如 `CSC_LINK`、`CSC_KEY_PASSWORD`、`APPLE_ID` 等）。
+macOS 默认 **不签名**（`CSC_IDENTITY_AUTO_DISCOVERY=false`）。若要公证分发，请自行配置 Apple 证书相关 Secrets（如 `CSC_LINK`、`CSC_KEY_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID` 等）。
 
 ---
 

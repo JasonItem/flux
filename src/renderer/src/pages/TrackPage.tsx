@@ -14,7 +14,7 @@ import {
   toast,
 } from '@lobehub/ui'
 import { Section } from '@lobehub/ui/dashboard'
-import { Compass, ExternalLink, History, Play, Plus, Trash2 } from 'lucide-react'
+import { Compass, ExternalLink, Play, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { DouyinAccount } from '../../../shared/tikhub'
@@ -308,111 +308,99 @@ export function TrackPage() {
             />
           )}
         </div>
+      ) : running ? (
+        <div className="page-empty">
+          <div className="research-loading">
+            <Spin size="large" />
+            <Text weight={600}>正在自测赛道</Text>
+            <Text type="secondary">
+              拉取近作、生成细分赛道，并搜索抖音校准热度、竞争、潜力与代表红人…
+            </Text>
+          </div>
+        </div>
+      ) : loading ? (
+        <div className="page-empty">
+          <Text type="secondary">正在读取上次自测结果…</Text>
+        </div>
+      ) : !current ? (
+        <div className="page-empty">
+          <Empty
+            description="选择账号后点「开始自测」，将先拆成分再给细分赛道。"
+            icon={Compass}
+            title="还没有自测结果"
+          />
+        </div>
       ) : (
-      <div className="page-stack">
-            {running ? (
-              <div className="page-empty">
-                <div className="research-loading">
-                  <Spin size="large" />
-                  <Text weight={600}>正在自测赛道</Text>
-                  <Text type="secondary">
-                    拉取近作、生成细分赛道，并搜索抖音校准热度、竞争、潜力与代表红人…
-                  </Text>
-                </div>
-              </div>
-            ) : (
-              <>
-                {refreshingMarket ? (
-                  <Alert
-                    description="正在用抖音搜索校准热度、竞争、潜力与真实代表红人，请稍候。"
-                    title="校准市场数据"
-                    type="info"
-                  />
-                ) : null}
+        <div className="page-stack">
+          {refreshingMarket ? (
+            <Alert
+              description="正在用抖音搜索校准热度、竞争、潜力与真实代表红人，请稍候。"
+              title="校准市场数据"
+              type="info"
+            />
+          ) : null}
 
-                {current ? (
-                  <AssessmentResult
-                    addingId={addingId}
-                    assessment={current}
-                    onAddTopic={addTopic}
-                    onOpenDetail={(candidate) => {
-                      void openDetail(candidate)
-                    }}
-                  />
-                ) : loading ? (
-                  <Text type="secondary">正在读取上次自测结果…</Text>
-                ) : (
-                  <div className="section-empty">
-                    <Empty
-                      description="选择账号后开始自测，将先拆成分再给细分赛道。"
-                      icon={Compass}
-                      title="还没有自测结果"
-                    />
-                  </div>
-                )}
-              </>
-            )}
+          <AssessmentResult
+            addingId={addingId}
+            assessment={current}
+            onAddTopic={addTopic}
+            onOpenDetail={(candidate) => {
+              void openDetail(candidate)
+            }}
+          />
 
+          {summaries.length > 0 ? (
             <Section title="历史记录">
-              {summaries.length === 0 ? (
-                <div className="section-empty">
-                  <Empty
-                    description="开始一次自测后，结果会留在这里。"
-                    icon={History}
-                    title="还没有历史记录"
-                  />
-                </div>
-              ) : (
-                <Table<TrackAssessmentSummary>
-                  columns={[
-                    {
-                      title: '时间',
-                      key: 'updatedAt',
-                      width: 168,
-                      render: (_: unknown, row) => formatTime(row.updatedAt),
-                    },
-                    {
-                      title: '状态',
-                      key: 'status',
-                      width: 88,
-                      render: (_: unknown, row) => <Tag>{statusLabel(row.status)}</Tag>,
-                    },
-                    {
-                      title: '候选',
-                      key: 'candidateCount',
-                      width: 72,
-                      render: (_: unknown, row) => `${String(row.candidateCount)} 条`,
-                    },
-                    {
-                      title: '操作',
-                      key: 'actions',
-                      width: 120,
-                      render: (_: unknown, row) => (
-                        <Flexbox gap={4} horizontal>
-                          <Button size="small" type="text" onClick={() => void openSummary(row.id)}>
-                            查看
-                          </Button>
-                          <Button
-                            danger
-                            icon={Trash2}
-                            size="small"
-                            type="text"
-                            onClick={() => void removeAssessment(row.id)}
-                          />
-                        </Flexbox>
-                      ),
-                    },
-                  ]}
-                  dataSource={summaries}
-                  pagination={tablePagination(5)}
-                  rowKey="id"
-                  size="small"
-                  variant="filled"
-                  className="table-with-pager"
-                />
-              )}
+              <Table<TrackAssessmentSummary>
+                columns={[
+                  {
+                    title: '时间',
+                    key: 'updatedAt',
+                    width: 168,
+                    render: (_: unknown, row) => formatTime(row.updatedAt),
+                  },
+                  {
+                    title: '状态',
+                    key: 'status',
+                    width: 88,
+                    render: (_: unknown, row) => <Tag>{statusLabel(row.status)}</Tag>,
+                  },
+                  {
+                    title: '候选',
+                    key: 'candidateCount',
+                    width: 72,
+                    render: (_: unknown, row) => `${String(row.candidateCount)} 条`,
+                  },
+                  {
+                    title: '操作',
+                    key: 'actions',
+                    width: 120,
+                    render: (_: unknown, row) => (
+                      <Flexbox gap={4} horizontal>
+                        <Button size="small" type="text" onClick={() => void openSummary(row.id)}>
+                          查看
+                        </Button>
+                        <Button
+                          danger
+                          icon={Trash2}
+                          size="small"
+                          type="text"
+                          onClick={() => void removeAssessment(row.id)}
+                        />
+                      </Flexbox>
+                    ),
+                  },
+                ]}
+                dataSource={summaries}
+                pagination={tablePagination(5)}
+                rowKey="id"
+                size="small"
+                variant="filled"
+                className="table-with-pager"
+              />
             </Section>
-      </div>
+          ) : null}
+        </div>
       )}
 
       <Modal

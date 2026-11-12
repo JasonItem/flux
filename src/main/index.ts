@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { app, BrowserWindow, ipcMain, Menu, screen, session, shell } from 'electron'
 
 import {
+  BackupChannels,
   CleanupChannels,
   DatabaseStatusChannel,
   LlmChannels,
@@ -12,6 +13,7 @@ import {
   ResearchChannels,
   TopicChannels,
   TrackChannels,
+  RadarChannels,
   WindowChannels,
   type CleanupUsageKeepDays,
   type DatabaseStatus,
@@ -26,8 +28,11 @@ import {
   type ResearchDissectRecordsQuery,
   type TopicManualInput,
   type TopicUpdateInput,
+  type RadarRulesUpdateInput,
+  type RadarSignalsQuery,
 } from '../shared/api'
 import { openDatabase, type AppDatabase } from './db'
+import { createBackupService, type BackupService } from './backup/service'
 import { createCleanupService, type CleanupService } from './cleanup/service'
 import { createLlmService, type LlmService } from './llm/service'
 import { createTikHubService, type TikHubService } from './tikhub/service'
@@ -46,6 +51,7 @@ import {
 import { ensureLocalMediaServer } from './media/localServer'
 import { createJobService, type JobService } from './jobs/service'
 import { createWorkshopService, type WorkshopService } from './workshop/service'
+import { createRadarService, type RadarService } from './radar/service'
 import { MediaChannels } from '../shared/media'
 import { JobChannels, type JobEnqueueInput } from '../shared/jobs'
 import {
@@ -54,6 +60,7 @@ import {
 } from '../shared/workshop'
 
 let database: AppDatabase | null = null
+let backupService: BackupService | null = null
 let cleanupService: CleanupService | null = null
 let llmService: LlmService | null = null
 let tikhubService: TikHubService | null = null
@@ -64,6 +71,7 @@ let accountAnalysisService: AccountAnalysisService | null = null
 let mediaService: MediaService | null = null
 let jobService: JobService | null = null
 let workshopService: WorkshopService | null = null
+let radarService: RadarService | null = null
 
 registerFluxMediaSchemePrivileged()
 
@@ -177,6 +185,105 @@ function requireAccountAnalysis(): AccountAnalysisService {
 function requireCleanup(): CleanupService {
   if (!cleanupService) throw new Error('本地清理服务尚未就绪')
   return cleanupService
+}
+
+function requireBackup(): BackupService {
+  if (!backupService) throw new Error('数据备份服务尚未就绪')
+  return backupService
+}
+
+function requireRadar(): RadarService {
+  if (!radarService) throw new Error('内容雷达服务尚未就绪')
+  return radarService
+}
+
+function shutdownDatabaseForRestore(): void {
+  try {
+    database?.close()
+  } catch {
+    // ignore close errors during restore
+  }
+  database = null
+  backupService = null
+  cleanupService = null
+  llmService = null
+  tikhubService = null
+  trackService = null
+  topicService = null
+  researchService = null
+  accountAnalysisService = null
+  mediaService = null
+  jobService = null
+  workshopService = null
+  radarService = null
+}
+
+function bootDatabaseServices(dbPath = databaseFilePath()): void {
+  database = openDatabase(dbPath)
+  cleanupService = createCleanupService({
+    db: database.sqlite,
+    databasePath: dbPath,
+    userDataPath: app.getPath('userData'),
+    session: session.defaultSession,
+    closeDatabase: shutdownDatabaseForRestore,
+  })
+  backupService = createBackupService({
+    getDb: () => {
+      if (!database) throw new Error('数据库尚未就绪')
+      return database.sqlite
+    },
+    closeDatabase: shutdownDatabaseForRestore,
+    reopenDatabase: () => {
+      bootDatabaseServices(dbPath)
+    },
+    databasePath: dbPath,
+    userDataPath: app.getPath('userData'),
+  })
+  llmService = createLlmService(database.llm)
+  tikhubService = createTikHubService(database.tikhub)
+  topicService = createTopicService(database.topic, database.track)
+  trackService = createTrackService(
+    database.track,
+    tikhubService,
+    database.topic,
+    llmService,
+  )
+  mediaService = createMediaService({
+    tikhub: tikhubService,
+    research: database.research,
+  })
+  jobService = createJobService({
+    jobs: database.jobs,
+    getResearch: () => requireResearch(),
+    getMedia: () => requireMedia(),
+    getWorkshop: () => requireWorkshop(),
+  })
+  researchService = createResearchService(
+    database.research,
+    database.topic,
+    llmService,
+    tikhubService,
+    mediaService,
+    jobService,
+  )
+  workshopService = createWorkshopService({
+    workshop: database.workshop,
+    research: database.research,
+    llm: llmService,
+    jobs: jobService,
+  })
+  accountAnalysisService = createAccountAnalysisService(
+    database.accountAnalysis,
+    tikhubService,
+    database.track,
+    llmService,
+  )
+  radarService = createRadarService(database.radar, tikhubService)
+  jobService.resumeQueued()
+  const status = database.status()
+  console.log(
+    `[studio] sqlite ready ${status.path} schema=${String(status.schemaVersion)} migrations=${status.appliedMigrations.join(',')}`,
+  )
 }
 
 function cleanIpcErrorMessage(error: unknown): string {
@@ -553,6 +660,53 @@ function registerWorkshopIpc(): void {
   )
 }
 
+function registerRadarIpc(): void {
+  ipcMain.handle(
+    RadarChannels.listAccounts,
+    wrapInvoke(() => requireRadar().listAccounts()),
+  )
+  ipcMain.handle(
+    RadarChannels.addAccount,
+    wrapInvoke((_event, input: string) => requireRadar().addAccount(input)),
+  )
+  ipcMain.handle(
+    RadarChannels.removeAccount,
+    wrapInvoke((_event, id: string) => {
+      requireRadar().removeAccount(id)
+    }),
+  )
+  ipcMain.handle(
+    RadarChannels.setAccountEnabled,
+    wrapInvoke((_event, id: string, enabled: boolean) =>
+      requireRadar().setAccountEnabled(id, enabled),
+    ),
+  )
+  ipcMain.handle(
+    RadarChannels.syncAccount,
+    wrapInvoke((_event, id: string) => requireRadar().syncAccount(id)),
+  )
+  ipcMain.handle(
+    RadarChannels.syncAllAccounts,
+    wrapInvoke(() => requireRadar().syncAllAccounts()),
+  )
+  ipcMain.handle(
+    RadarChannels.listSignals,
+    wrapInvoke((_event, query?: RadarSignalsQuery) => requireRadar().listSignals(query)),
+  )
+  ipcMain.handle(
+    RadarChannels.refreshHot,
+    wrapInvoke(() => requireRadar().refreshHot()),
+  )
+  ipcMain.handle(
+    RadarChannels.getRules,
+    wrapInvoke(() => requireRadar().getRules()),
+  )
+  ipcMain.handle(
+    RadarChannels.updateRules,
+    wrapInvoke((_event, input: RadarRulesUpdateInput) => requireRadar().updateRules(input)),
+  )
+}
+
 function registerJobsIpc(): void {
   ipcMain.handle(
     JobChannels.list,
@@ -640,6 +794,29 @@ function registerCleanupIpc(): void {
     CleanupChannels.clearMediaCache,
     wrapInvoke(() => requireCleanup().clearMediaCache()),
   )
+  ipcMain.handle(
+    CleanupChannels.clearSqliteData,
+    wrapInvoke(() => requireCleanup().clearSqliteData()),
+  )
+}
+
+function registerBackupIpc(): void {
+  ipcMain.handle(
+    BackupChannels.getStatus,
+    wrapInvoke(() => requireBackup().getStatus()),
+  )
+  ipcMain.handle(
+    BackupChannels.exportDatabase,
+    wrapInvoke((event) =>
+      requireBackup().exportDatabase(BrowserWindow.fromWebContents(event.sender)),
+    ),
+  )
+  ipcMain.handle(
+    BackupChannels.importDatabase,
+    wrapInvoke((event) =>
+      requireBackup().importDatabase(BrowserWindow.fromWebContents(event.sender)),
+    ),
+  )
 }
 
 app.setName('Flux')
@@ -679,57 +856,7 @@ void app.whenReady().then(async () => {
   try {
     const dbPath = databaseFilePath()
     migrateLegacyDatabaseIfNeeded(dbPath)
-    database = openDatabase(dbPath)
-    cleanupService = createCleanupService({
-      db: database.sqlite,
-      databasePath: dbPath,
-      userDataPath: app.getPath('userData'),
-      session: session.defaultSession,
-    })
-    llmService = createLlmService(database.llm)
-    tikhubService = createTikHubService(database.tikhub)
-    topicService = createTopicService(database.topic, database.track)
-    trackService = createTrackService(
-      database.track,
-      tikhubService,
-      database.topic,
-      llmService,
-    )
-    mediaService = createMediaService({
-      tikhub: tikhubService,
-      research: database.research,
-    })
-    jobService = createJobService({
-      jobs: database.jobs,
-      getResearch: () => requireResearch(),
-      getMedia: () => requireMedia(),
-      getWorkshop: () => requireWorkshop(),
-    })
-    researchService = createResearchService(
-      database.research,
-      database.topic,
-      llmService,
-      tikhubService,
-      mediaService,
-      jobService,
-    )
-    workshopService = createWorkshopService({
-      workshop: database.workshop,
-      research: database.research,
-      llm: llmService,
-      jobs: jobService,
-    })
-    accountAnalysisService = createAccountAnalysisService(
-      database.accountAnalysis,
-      tikhubService,
-      database.track,
-      llmService,
-    )
-    jobService.resumeQueued()
-    const status = database.status()
-    console.log(
-      `[studio] sqlite ready ${status.path} schema=${String(status.schemaVersion)} migrations=${status.appliedMigrations.join(',')}`,
-    )
+    bootDatabaseServices(dbPath)
   } catch (error) {
     console.error('[studio] sqlite failed', error)
   }
@@ -751,7 +878,9 @@ void app.whenReady().then(async () => {
   registerJobsIpc()
   registerMediaIpc()
   registerAccountAnalysisIpc()
+  registerRadarIpc()
   registerCleanupIpc()
+  registerBackupIpc()
 
   ipcMain.on(WindowChannels.minimize, (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize()
@@ -786,6 +915,7 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   database?.close()
   database = null
+  backupService = null
   cleanupService = null
   llmService = null
   tikhubService = null
@@ -793,4 +923,7 @@ app.on('will-quit', () => {
   topicService = null
   researchService = null
   accountAnalysisService = null
+  mediaService = null
+  jobService = null
+  workshopService = null
 })

@@ -1,11 +1,12 @@
 import { AreaChart, BarList, CategoryBar } from '@lobehub/charts'
-import { Button, Spin, Tag, Text, toast } from '@lobehub/ui'
+import { Button, Empty, Spin, Tag, Text, toast } from '@lobehub/ui'
 import {
   CheckCircle2,
   CircleAlert,
   Clapperboard,
   FileSearch,
   Heart,
+  LayoutDashboard,
   Lightbulb,
   ListChecks,
   MessageCircle,
@@ -216,14 +217,15 @@ export function WorkbenchPage() {
   const sampleTotal = (snap?.pendingVideos ?? 0) + (snap?.readyVideos ?? 0)
   const sampleReadyShare =
     sampleTotal > 0 ? Math.round(((snap?.readyVideos ?? 0) / sampleTotal) * 100) : 0
-  const hasActivity =
-    recentTopics.length > 0 ||
-    recentSummaries.length > 0 ||
-    topVideos.length > 0 ||
+  const hasPrimary =
+    recentTopics.length > 0 || recentSummaries.length > 0 || topVideos.length > 0
+  const hasSide =
+    sampleTotal > 0 ||
     sampleTypeData.length > 0 ||
     accountPerfData.length > 0 ||
     accountTypeData.length > 0 ||
     tikhubTrend.length > 0
+  const hasActivity = hasPrimary || hasSide
 
   if (loading) {
     return (
@@ -325,122 +327,141 @@ export function WorkbenchPage() {
         {hasActivity ? (
           <div className="workbench-main">
             <div className="workbench-main__primary">
-              {recentTopics.length > 0 ? (
-                <section className="workbench-feed">
-                  <div className="workbench-feed__head">
-                    <Text weight={600}>最近选题</Text>
-                    <Button size="small" type="text" onClick={() => navigate('/research')}>
-                      全部
-                    </Button>
-                  </div>
-                  <div className="workbench-feed__list">
-                    {recentTopics.map((topic) => (
-                      <button
-                        key={topic.id}
-                        className="workbench-feed__row"
-                        type="button"
-                        onClick={() => navigate('/research')}
-                      >
-                        <span className="workbench-feed__title">{topic.title}</span>
-                        <span className="workbench-feed__meta">{formatTime(topic.updatedAt)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+              {hasPrimary ? (
+                <>
+                  {recentTopics.length > 0 ? (
+                    <section className="workbench-feed">
+                      <div className="workbench-feed__head">
+                        <Text weight={600}>最近选题</Text>
+                        <Button size="small" type="text" onClick={() => navigate('/research')}>
+                          全部
+                        </Button>
+                      </div>
+                      <div className="workbench-feed__list">
+                        {recentTopics.map((topic) => (
+                          <button
+                            key={topic.id}
+                            className="workbench-feed__row"
+                            type="button"
+                            onClick={() => navigate('/research')}
+                          >
+                            <span className="workbench-feed__title">{topic.title}</span>
+                            <span className="workbench-feed__meta">
+                              {formatTime(topic.updatedAt)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
 
-              {recentSummaries.length > 0 ? (
-                <section className="workbench-feed">
-                  <div className="workbench-feed__head">
-                    <Text weight={600}>最近自测</Text>
-                    <Button size="small" type="text" onClick={() => navigate('/track')}>
-                      全部
-                    </Button>
-                  </div>
-                  <div className="workbench-feed__list">
-                    {recentSummaries.map((row) => (
-                      <button
-                        key={row.id}
-                        className="workbench-feed__row"
-                        type="button"
-                        onClick={() => navigate('/track')}
-                      >
-                        <span className="workbench-feed__title">
-                          {formatTime(row.createdAt)}
-                          <span className="workbench-feed__sub">
-                            {row.candidateCount} 个候选赛道
-                          </span>
-                        </span>
-                        <Tag>
-                          {row.status === 'ready'
-                            ? '已完成'
-                            : row.status === 'running'
-                              ? '进行中'
-                              : row.status === 'failed'
-                                ? '失败'
-                                : row.status}
-                        </Tag>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+                  {recentSummaries.length > 0 ? (
+                    <section className="workbench-feed">
+                      <div className="workbench-feed__head">
+                        <Text weight={600}>最近自测</Text>
+                        <Button size="small" type="text" onClick={() => navigate('/track')}>
+                          全部
+                        </Button>
+                      </div>
+                      <div className="workbench-feed__list">
+                        {recentSummaries.map((row) => (
+                          <button
+                            key={row.id}
+                            className="workbench-feed__row"
+                            type="button"
+                            onClick={() => navigate('/track')}
+                          >
+                            <span className="workbench-feed__title">
+                              {formatTime(row.createdAt)}
+                              <span className="workbench-feed__sub">
+                                {row.candidateCount} 个候选赛道
+                              </span>
+                            </span>
+                            <Tag>
+                              {row.status === 'ready'
+                                ? '已完成'
+                                : row.status === 'running'
+                                  ? '进行中'
+                                  : row.status === 'failed'
+                                    ? '失败'
+                                    : row.status}
+                            </Tag>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
 
-              {topVideos.length > 0 ? (
-                <section className="workbench-feed">
-                  <div className="workbench-feed__head">
-                    <Text weight={600}>近作相对高分</Text>
-                    <Button size="small" type="text" onClick={() => navigate('/accounts')}>
-                      账号分析
-                    </Button>
-                  </div>
-                  <div className="workbench-feed__list">
-                    {topVideos.map((row) => {
-                      const openVideo = () => {
-                        if (snap.activeAccount?.id) {
-                          navigate(accountVideoHref(snap.activeAccount.id, row.awemeId))
-                          return
-                        }
-                        navigate('/accounts')
-                      }
-                      return (
-                        <div key={row.awemeId} className="workbench-video-card">
-                          <VideoCoverThumb
-                            coverUrl={row.coverUrl}
-                            title={row.title || '无标题作品'}
-                            onPlay={openVideo}
-                          />
-                          <div className="workbench-video-card__body">
-                            <DouyinTitleLink
-                              awemeId={row.awemeId}
-                              className="workbench-video-card__title"
-                              profileUrl={row.profileUrl}
-                              title={row.title || '无标题作品'}
-                            />
-                            <div className="workbench-video-card__stats">
-                              <span>
-                                <Heart size={12} aria-hidden />
-                                {formatCount(row.diggCount)}
-                              </span>
-                              <span>
-                                <MessageCircle size={12} aria-hidden />
-                                {formatCount(row.commentCount)}
-                              </span>
-                              <span>
-                                <Share2 size={12} aria-hidden />
-                                {formatCount(row.shareCount)}
-                              </span>
-                              <span className="workbench-video-card__type">
-                                {row.videoType} · 估播 {formatCount(row.estimatedPlay)}
-                              </span>
+                  {topVideos.length > 0 ? (
+                    <section className="workbench-feed">
+                      <div className="workbench-feed__head">
+                        <Text weight={600}>近作相对高分</Text>
+                        <Button size="small" type="text" onClick={() => navigate('/accounts')}>
+                          账号分析
+                        </Button>
+                      </div>
+                      <div className="workbench-feed__list">
+                        {topVideos.map((row) => {
+                          const openVideo = () => {
+                            if (snap.activeAccount?.id) {
+                              navigate(accountVideoHref(snap.activeAccount.id, row.awemeId))
+                              return
+                            }
+                            navigate('/accounts')
+                          }
+                          return (
+                            <div key={row.awemeId} className="workbench-video-card">
+                              <VideoCoverThumb
+                                coverUrl={row.coverUrl}
+                                title={row.title || '无标题作品'}
+                                onPlay={openVideo}
+                              />
+                              <div className="workbench-video-card__body">
+                                <DouyinTitleLink
+                                  awemeId={row.awemeId}
+                                  className="workbench-video-card__title"
+                                  profileUrl={row.profileUrl}
+                                  title={row.title || '无标题作品'}
+                                />
+                                <div className="workbench-video-card__stats">
+                                  <span>
+                                    <Heart size={12} aria-hidden />
+                                    {formatCount(row.diggCount)}
+                                  </span>
+                                  <span>
+                                    <MessageCircle size={12} aria-hidden />
+                                    {formatCount(row.commentCount)}
+                                  </span>
+                                  <span>
+                                    <Share2 size={12} aria-hidden />
+                                    {formatCount(row.shareCount)}
+                                  </span>
+                                  <span className="workbench-video-card__type">
+                                    {row.videoType} · 估播 {formatCount(row.estimatedPlay)}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </section>
-              ) : null}
+                          )
+                        })}
+                      </div>
+                    </section>
+                  ) : null}
+                </>
+              ) : (
+                <div className="workbench-primary-empty">
+                  <Empty
+                    description="去赛道自测生成细分赛道，或添加选题后再做样本拆解。"
+                    icon={LayoutDashboard}
+                    title="左侧还没有动态"
+                    action={
+                      <Button type="primary" onClick={() => navigate('/track')}>
+                        赛道自测
+                      </Button>
+                    }
+                  />
+                </div>
+              )}
             </div>
 
             <aside className="workbench-main__side">
@@ -524,20 +545,35 @@ export function WorkbenchPage() {
               ) : null}
             </aside>
           </div>
-        ) : setupReady ? (
-          <div className="workbench-section workbench-section--hint">
-            <Text weight={500}>下一步建议</Text>
-            <Text type="secondary">
-              环境已就绪。去赛道自测生成细分赛道，添加选题后再做样本拆解。
-            </Text>
-            <div className="workbench-panel__actions">
-              <Button type="primary" onClick={() => navigate('/track')}>
-                赛道自测
-              </Button>
-              <Button onClick={() => navigate('/research')}>样本拆解</Button>
-            </div>
+        ) : (
+          <div className="page-empty workbench-blank">
+            <Empty
+              description={
+                setupReady
+                  ? '去赛道自测生成细分赛道，添加选题后再做样本拆解。'
+                  : '先完成上方配置，再去做赛道自测和样本拆解。'
+              }
+              icon={LayoutDashboard}
+              title="工作台还是空的"
+              action={
+                <div className="workbench-panel__actions">
+                  {setupReady ? (
+                    <>
+                      <Button type="primary" onClick={() => navigate('/track')}>
+                        赛道自测
+                      </Button>
+                      <Button onClick={() => navigate('/research')}>样本拆解</Button>
+                    </>
+                  ) : (
+                    <Button type="primary" onClick={() => navigate('/settings/accounts')}>
+                      去设置
+                    </Button>
+                  )}
+                </div>
+              }
+            />
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   )

@@ -47,7 +47,7 @@ export function CleanupPanel() {
   async function runAction(
     key: string,
     title: string,
-    action: () => Promise<{ freedBytes: number; detail: string }>,
+    action: () => Promise<{ freedBytes: number; detail: string; relaunching?: boolean }>,
   ): Promise<void> {
     setBusy(key)
     try {
@@ -56,7 +56,7 @@ export function CleanupPanel() {
         title,
         description: `${result.detail}${result.freedBytes > 0 ? ` · 约释放 ${formatBytes(result.freedBytes)}` : ''}`,
       })
-      await refresh()
+      if (!result.relaunching) await refresh()
     } catch (reason: unknown) {
       toast.error({
         title: `${title}失败`,
@@ -77,6 +77,42 @@ export function CleanupPanel() {
           <Text code>{status?.databasePath ?? (loading ? '正在读取…' : '路径未知')}</Text>
           <Text type="secondary">库文件约 {formatBytes(status?.databaseBytes ?? 0)}</Text>
         </div>
+
+        <section className="cleanup-section">
+          <div className="cleanup-section-head">
+            <div>
+              <Text weight={600}>数据清理</Text>
+              <Text as="div" type="secondary">
+                一键清空本地 SQLite 里的业务数据（账号、选题、拆解、脚本、赛道自测、API 配置与用量等）。不会删除视频缓存与 Whisper 模型，也不会重启应用。
+              </Text>
+            </div>
+            <Text weight={600}>{formatBytes(status?.databaseBytes ?? 0)}</Text>
+          </div>
+          <Alert
+            description="此操作不可恢复。如需保留数据，请先到「数据备份」导出。"
+            title="危险操作"
+            type="warning"
+          />
+          <div className="cleanup-actions">
+            <Button
+              danger
+              disabled={!status || status.databaseBytes <= 0}
+              loading={busy === 'sqlite'}
+              onClick={() => {
+                void runAction('sqlite', '已清空本地数据', async () => {
+                  const result = await window.studio.cleanup.clearSqliteData()
+                  window.setTimeout(() => {
+                    window.location.hash = '#/workbench'
+                    window.location.reload()
+                  }, 400)
+                  return result
+                })
+              }}
+            >
+              一键清空 SQLite 数据
+            </Button>
+          </div>
+        </section>
 
         <section className="cleanup-section">
           <div className="cleanup-section-head">

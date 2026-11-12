@@ -195,7 +195,10 @@ export interface ResearchRepository {
     topicId: string,
     accountId: string,
     draft: ResearchVideoDraft,
+    options?: { source?: 'custom' | 'radar'; isCurrent?: boolean },
   ) => ResearchVideoSummary
+  /** 从样本/自定义列表撤出，仅保留拆解记录入口 */
+  markVideoAsRecordOnly: (id: string) => ResearchVideoSummary
   listCustomVideos: (limit?: number) => ResearchVideoSummary[]
   findByAwemeId: (awemeId: string) => ResearchVideoSummary | null
   getVideo: (id: string) => ResearchVideoDetail
@@ -408,10 +411,12 @@ export function createResearchRepository(db: Database.Database): ResearchReposit
       return rows.map(mapSummary)
     },
 
-    upsertCustomVideo: (topicId, accountId, draft) => {
+    upsertCustomVideo: (topicId, accountId, draft, options) => {
       const awemeId = draft.awemeId?.trim() || ''
       if (!awemeId) throw new Error('缺少 aweme_id')
       const stamp = nowIso()
+      const source = options?.source === 'radar' ? 'radar' : 'custom'
+      const isCurrent = options?.isCurrent == null ? 1 : options.isCurrent ? 1 : 0
       const existing = db
         .prepare(
           `SELECT v.*, t.title AS topic_title
@@ -441,8 +446,8 @@ export function createResearchRepository(db: Database.Database): ResearchReposit
                match_score = @matchScore,
                profile_url = @profileUrl,
                summary = CASE WHEN IFNULL(summary, '') = '' THEN @summary ELSE summary END,
-               source = 'custom',
-               is_current = 1,
+               source = @source,
+               is_current = @isCurrent,
                updated_at = @stamp
            WHERE id = @id`,
         ).run({
@@ -462,6 +467,8 @@ export function createResearchRepository(db: Database.Database): ResearchReposit
           matchScore: draft.matchScore,
           profileUrl: draft.profileUrl,
           summary: draft.summary || '自定义链接拆解',
+          source,
+          isCurrent,
           stamp,
         })
         return mapSummary({
@@ -481,7 +488,7 @@ export function createResearchRepository(db: Database.Database): ResearchReposit
          (@id, @topicId, @accountId, @awemeId, @title, @authorNickname, @authorUniqueId, @coverUrl,
           @playUrl, NULL, 'none', 'pending', '', '[]', NULL,
           @diggCount, @commentCount, @shareCount, @durationSec, @videoType, @matchScore, 'pending',
-          @profileUrl, @summary, '', @breakdownJson, @createdAt, @updatedAt, 1, 'custom')`,
+          @profileUrl, @summary, '', @breakdownJson, @createdAt, @updatedAt, @isCurrent, @source)`,
       ).run({
         id,
         topicId,
@@ -503,7 +510,30 @@ export function createResearchRepository(db: Database.Database): ResearchReposit
         breakdownJson: breakdownJsonFromDraft(draft),
         createdAt: stamp,
         updatedAt: stamp,
+        isCurrent,
+        source,
       })
+      return mapSummary(selectJoined.get(id) as VideoRow)
+    },
+
+    markVideoAsRecordOnly: (id) => {
+      const stamp = nowIso()
+      const result = db
+        .prepare(
+          `UPDATE research_videos
+           SET is_current = CASE
+                 WHEN IFNULL(source, 'sample') IN ('custom', 'radar') THEN 0
+                 ELSE is_current
+               END,
+               source = CASE
+                 WHEN IFNULL(source, 'sample') IN ('custom', 'radar') THEN 'radar'
+                 ELSE source
+               END,
+               updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(stamp, id)
+      if (result.changes === 0) throw new Error('样本不存在')
       return mapSummary(selectJoined.get(id) as VideoRow)
     },
 

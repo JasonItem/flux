@@ -7,10 +7,12 @@ export function WindowControls() {
 
   useEffect(() => {
     let active = true
-    void window.studio.window.isMaximized().then((value) => {
+    const api = window.studio?.window
+    if (!api) return
+    void api.isMaximized().then((value) => {
       if (active) setMaximized(value)
     })
-    const unsubscribe = window.studio.window.onMaximizedChange((value) => {
+    const unsubscribe = api.onMaximizedChange((value) => {
       setMaximized(value)
     })
     return () => {
@@ -27,7 +29,7 @@ export function WindowControls() {
         size="small"
         title="最小化"
         onClick={() => {
-          window.studio.window.minimize()
+          window.studio?.window.minimize()
         }}
       />
       <ActionIcon
@@ -36,7 +38,7 @@ export function WindowControls() {
         size="small"
         title={maximized ? '还原' : '最大化'}
         onClick={() => {
-          window.studio.window.toggleMaximize()
+          window.studio?.window.toggleMaximize()
         }}
       />
       <ActionIcon
@@ -46,7 +48,7 @@ export function WindowControls() {
         size="small"
         title="关闭"
         onClick={() => {
-          window.studio.window.close()
+          window.studio?.window.close()
         }}
       />
     </div>

@@ -100,13 +100,22 @@ export function ResearchPage() {
     [topics],
   )
 
+  /** 样本拆解只展示真实选题；自定义/雷达桶只用于对应 Tab 与拆解记录 */
+  const sampleTopics = useMemo(
+    () =>
+      validTopics.filter(
+        (item) => item.title !== '自定义拆解' && item.title !== '内容雷达',
+      ),
+    [validTopics],
+  )
+
   const topicOptions = useMemo(
     () =>
-      validTopics.map((item) => ({
+      sampleTopics.map((item) => ({
         label: `${item.title} · ${item.accountNickname || '未知账号'}`,
         value: item.id,
       })),
-    [validTopics],
+    [sampleTopics],
   )
 
   const videoTypeFilters = useMemo(() => {
@@ -123,9 +132,12 @@ export function ResearchPage() {
     )
     setTopics(nextTopics)
 
+    const sampleOnly = nextTopics.filter(
+      (item) => item.title !== '自定义拆解' && item.title !== '内容雷达',
+    )
     const preferred =
-      nextTopics.find((item) => item.status === 'selected' || item.status === 'kept')?.id ||
-      nextTopics[0]?.id ||
+      sampleOnly.find((item) => item.status === 'selected' || item.status === 'kept')?.id ||
+      sampleOnly[0]?.id ||
       ''
     setTopicId(preferred)
 
@@ -199,14 +211,22 @@ export function ResearchPage() {
   // 当前选中已不在列表里时（例如刚删完），清掉非法值，避免 Select 显示 "undefined"
   useEffect(() => {
     if (!topicId) return
+    if (tab === 'samples') {
+      if (sampleTopics.some((item) => item.id === topicId)) return
+      const nextId = sampleTopics[0]?.id || ''
+      setTopicId(nextId)
+      setVideos([])
+      if (nextId) void loadVideosWithCovers(nextId).then(setVideos).catch(() => setVideos([]))
+      return
+    }
     if (validTopics.some((item) => item.id === topicId)) return
     setTopicId(validTopics[0]?.id || '')
     setVideos([])
-  }, [topicId, validTopics])
+  }, [topicId, validTopics, sampleTopics, tab])
 
   const changeTopic = async (nextId: string) => {
     if (!nextId || nextId === 'undefined' || nextId === 'null') return
-    if (!validTopics.some((item) => item.id === nextId)) {
+    if (!sampleTopics.some((item) => item.id === nextId)) {
       toast.error({ title: '切换选题失败', description: '选题不存在或已删除' })
       return
     }
@@ -397,7 +417,7 @@ export function ResearchPage() {
             options={topicOptions}
             placeholder="先选择选题"
             style={{ minWidth: 260, maxWidth: 420 }}
-            value={validTopics.some((item) => item.id === topicId) ? topicId : undefined}
+            value={sampleTopics.some((item) => item.id === topicId) ? topicId : undefined}
             onChange={(value) => {
               if (value === undefined || value === null || value === '') return
               const nextId = typeof value === 'string' ? value : String(value)
@@ -406,7 +426,7 @@ export function ResearchPage() {
             }}
           />
           <Button
-            disabled={!selectedTopic}
+            disabled={!selectedTopic || !sampleTopics.some((item) => item.id === topicId)}
             icon={videos.length > 0 ? RefreshCw : Play}
             loading={analyzing || loading}
             type="primary"
@@ -475,7 +495,7 @@ export function ResearchPage() {
 
       <div className="page-stack">
         {tab === 'samples' ? (
-          validTopics.length === 0 ? (
+          sampleTopics.length === 0 ? (
             <div className="section-empty">
               {loading ? (
                 <Text type="secondary">正在加载…</Text>

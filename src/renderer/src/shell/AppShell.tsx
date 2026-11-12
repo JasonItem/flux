@@ -1,12 +1,14 @@
 import { Breadcrumb, ConsoleBrand, ConsoleNav, ConsoleShell } from '@lobehub/ui/dashboard'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import logoMarkUrl from '../assets/logo-mark.png'
 import logoWordmarkDarkUrl from '../assets/logo-wordmark-dark.png'
 import logoWordmarkLightUrl from '../assets/logo-wordmark-light.png'
 import { AccountsPage } from '../pages/AccountsPage'
 import { AccountVideoPage } from '../pages/AccountVideoPage'
+import { JobsPage } from '../pages/JobsPage'
 import { PlaceholderPage } from '../pages/PlaceholderPage'
+import { RadarPage } from '../pages/RadarPage'
 import { ResearchPage } from '../pages/ResearchPage'
 import { ResearchVideoPage } from '../pages/ResearchVideoPage'
 import { TrackPage } from '../pages/TrackPage'
@@ -28,30 +30,48 @@ import { SettingsView } from '../settings/SettingsView'
 import { useHashRoute } from '../hooks/useHashRoute'
 import { ThemeSwitch } from '../theme/ThemeRoot'
 import { mainNav, settingsNav } from './nav'
-import { JobsButton } from './JobsButton'
-import { SettingsButton } from './SettingsButton'
+import { JobsToaster } from './JobsToaster'
 import { TikHubBalance } from './TikHubBalance'
 import { WindowControls } from './WindowControls'
 
 export function AppShell() {
   const path = useHashRoute()
+  const [activeJobCount, setActiveJobCount] = useState(0)
   const inSettings = isSettingsPath(path)
   const researchVideoId = parseResearchVideoId(path)
   const workshopScriptId = parseWorkshopScriptId(path)
   const accountVideo = parseAccountVideoParams(path)
+
+  useEffect(() => {
+    const sync = (jobs: { status: string }[]) => {
+      setActiveJobCount(
+        jobs.filter((job) => job.status === 'running' || job.status === 'queued').length,
+      )
+    }
+    const studio = window.studio
+    if (!studio?.jobs) return
+    void studio.jobs.list().then(sync).catch(() => undefined)
+    return studio.jobs.onChanged((event) => {
+      sync(event.jobs)
+    })
+  }, [])
   const navPath = isResearchVideoPath(path)
     ? '/research'
     : isWorkshopScriptPath(path)
       ? '/workshop'
       : isAccountVideoPath(path)
         ? '/accounts'
-        : path
+        : inSettings
+          ? '/settings'
+          : path
   const currentMain = mainNav.find((item) => item.href === navPath)
   const currentSettings = settingsNav.find((item) => item.href === path)
   const lastMain = useRef<MainHref>('/workbench')
 
   useEffect(() => {
-    if (currentMain) lastMain.current = currentMain.href
+    if (!currentMain) return
+    if (currentMain.href === '/settings' || currentMain.href === '/jobs') return
+    lastMain.current = currentMain.href
   }, [currentMain])
 
   const breadcrumbItems = useMemo(() => {
@@ -61,8 +81,8 @@ export function AppShell() {
           label: mainNav.find((item) => item.href === lastMain.current)?.label ?? '工作台',
           onClick: () => navigate(lastMain.current),
         },
-        { label: '设置' },
-        { label: currentSettings?.label ?? '设置' },
+        { label: '系统设置' },
+        { label: currentSettings?.label ?? '系统设置' },
       ]
     }
 
@@ -103,6 +123,7 @@ export function AppShell() {
     currentSettings?.label,
     inSettings,
     researchVideoId,
+    workshopScriptId,
   ])
 
   return (
@@ -139,19 +160,24 @@ export function AppShell() {
       footer={
         <div className="sidebar-footer">
           <TikHubBalance />
-          <div className="sidebar-footer__actions">
-            <JobsButton />
-            <SettingsButton active={inSettings} />
-          </div>
         </div>
       }
       navigation={
         <ConsoleNav
-          items={mainNav.map((item) => ({
-            href: item.href,
-            icon: item.icon,
-            label: item.label,
-          }))}
+          items={mainNav.map((item) => {
+            const badge =
+              item.href === '/jobs' && activeJobCount > 0
+                ? activeJobCount > 99
+                  ? 99
+                  : activeJobCount
+                : undefined
+            return {
+              href: item.href,
+              icon: item.icon,
+              label: item.label,
+              ...(badge != null ? { badge } : {}),
+            }
+          })}
           label="主导航"
           pathname={typeof navPath === 'string' ? navPath : '/workbench'}
           onNavigate={(href) => {
@@ -164,12 +190,15 @@ export function AppShell() {
       storageKey="studio-sidebar"
       tools={<WindowControls />}
     >
+      <JobsToaster />
       {inSettings ? (
         <SettingsView path={path} onBack={() => navigate(lastMain.current)} />
       ) : path === '/workbench' ? (
         <WorkbenchPage />
       ) : path === '/track' ? (
         <TrackPage />
+      ) : path === '/radar' ? (
+        <RadarPage />
       ) : researchVideoId ? (
         <ResearchVideoPage videoId={researchVideoId} />
       ) : path === '/research' ? (
@@ -182,6 +211,8 @@ export function AppShell() {
         <AccountVideoPage accountId={accountVideo.accountId} awemeId={accountVideo.awemeId} />
       ) : path === '/accounts' ? (
         <AccountsPage />
+      ) : path === '/jobs' ? (
+        <JobsPage />
       ) : currentMain ? (
         <PlaceholderPage item={currentMain} />
       ) : (

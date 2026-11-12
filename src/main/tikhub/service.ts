@@ -53,6 +53,10 @@ export interface TikHubService {
     id: string,
     options?: { maxCursor?: string; count?: number },
   ) => Promise<DouyinVideoPage>
+  fetchUserPostVideos: (
+    secUserId: string,
+    options?: { maxCursor?: string; count?: number },
+  ) => Promise<DouyinVideoPage>
   searchVideos: (
     keyword: string,
     options?: { sortType?: '0' | '1' | '2'; pages?: number },
@@ -345,6 +349,18 @@ export function createTikHubService(repo: TikHubRepository): TikHubService {
       return fetchUserPostVideos(
         client,
         account.secUserId,
+        options?.maxCursor ?? '0',
+        options?.count ?? 12,
+      )
+    },
+
+    fetchUserPostVideos: async (secUserId, options) => {
+      const client = requireClientOptions()
+      const id = secUserId.trim()
+      if (!id) throw new Error('缺少 sec_user_id')
+      return fetchUserPostVideos(
+        client,
+        id,
         options?.maxCursor ?? '0',
         options?.count ?? 12,
       )

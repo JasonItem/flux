@@ -56,14 +56,23 @@ function firstUrlFromList(raw: unknown): string | null {
   return null
 }
 
+function normalizeMediaUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const value = raw.trim()
+  if (!value) return null
+  if (/^https?:\/\//i.test(value)) return value
+  if (value.startsWith('//')) return `https:${value}`
+  return null
+}
+
 function pickUrlCandidate(candidate: unknown): string | null {
-  if (typeof candidate === 'string' && /^https?:\/\//i.test(candidate)) return candidate
+  if (typeof candidate === 'string') return normalizeMediaUrl(candidate)
   const record = asRecord(candidate)
   if (!record) return null
   return (
-    firstUrlFromList(record.url_list) ??
-    asString(record.url) ??
-    asString(record.uri)
+    normalizeMediaUrl(firstUrlFromList(record.url_list)) ??
+    normalizeMediaUrl(asString(record.url)) ??
+    normalizeMediaUrl(asString(record.uri))
   )
 }
 
@@ -87,12 +96,20 @@ function pickCover(video: Record<string, unknown>, item: Record<string, unknown>
     video.cover,
     video.origin_cover,
     video.dynamic_cover,
+    video.animated_cover,
     video.ai_static_cover,
+    video.cover_thumb,
     video.cover_url,
     item.cover,
     item.origin_cover,
     item.dynamic_cover,
+    item.animated_cover,
     item.cover_url,
+    item.video_cover,
+    // 部分搜索结果把封面挂在外层字段
+    asRecord(item.video)?.cover,
+    asRecord(item.video)?.origin_cover,
+    asRecord(item.video)?.dynamic_cover,
   ]
   for (const candidate of candidates) {
     const url = pickUrlCandidate(candidate)
@@ -174,6 +191,7 @@ function parseVideoItem(raw: unknown): DouyinVideoItem | null {
   if (!awemeId) return null
   const stats = asRecord(item.statistics) ?? {}
   const video = asRecord(item.video) ?? {}
+  const status = asRecord(item.status) ?? {}
 
   return {
     awemeId,
@@ -181,10 +199,18 @@ function parseVideoItem(raw: unknown): DouyinVideoItem | null {
     coverUrl: pickCover(video, item),
     playUrl: pickPlayUrl(video) ?? pickPlayUrl(item),
     createTime: asNumber(item.create_time) || null,
-    diggCount: asNumber(stats.digg_count ?? item.digg_count),
+    diggCount: asNumber(stats.digg_count ?? item.digg_count ?? item.like_count),
     commentCount: asNumber(stats.comment_count ?? item.comment_count),
     shareCount: asNumber(stats.share_count ?? item.share_count),
-    playCount: asNumber(stats.play_count ?? item.play_count),
+    // 搜索/部分列表接口常不回 play_count，尽量兼容别名
+    playCount: asNumber(
+      stats.play_count ??
+        stats.aweme_play_count ??
+        item.play_count ??
+        item.play_cnt ??
+        item.playCount ??
+        status.play_count,
+    ),
     durationMs: asNumber(video.duration ?? item.duration) || null,
   }
 }
@@ -671,12 +697,12 @@ export async function fetchVideoSearch(
     if (meta.backtrace) backtrace = meta.backtrace
 
     const gained = collected.length - beforeCount
-    // 本页无新增，或明确没有更多，则停
+    // 本页无解析结果、无新增，或明确没有更多，则停
     if (!batch.length || gained === 0) break
-    if (!meta.hasMore && page > 0) break
+    if (!meta.hasMore) break
 
     const next = meta.cursor
-    if (next === cursor && page > 0) break
+    if (next === cursor) break
     cursor = next
   }
 

@@ -16,6 +16,7 @@ import { createResearchRepository, type ResearchRepository } from './research/re
 import { createTopicRepository, type TopicRepository } from './topic/repository'
 import { createTrackRepository, type TrackRepository } from './track/repository'
 import { createWorkshopRepository, type WorkshopRepository } from './workshop/repository'
+import { createRadarRepository, type RadarRepository } from './radar/repository'
 
 interface MigrationRow {
   id: number
@@ -33,6 +34,7 @@ export interface AppDatabase {
   accountAnalysis: AccountAnalysisRepository
   workshop: WorkshopRepository
   jobs: JobRepository
+  radar: RadarRepository
   close: () => void
 }
 
@@ -89,6 +91,7 @@ export function openDatabase(filePath: string): AppDatabase {
     accountAnalysis: createAccountAnalysisRepository(db),
     workshop: createWorkshopRepository(db),
     jobs: createJobRepository(db),
+    radar: createRadarRepository(db),
     close: () => {
       db.close()
     },

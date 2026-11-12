@@ -1,9 +1,19 @@
-export const mainHrefs = ['/workbench', '/track', '/research', '/workshop', '/accounts'] as const
+export const mainHrefs = [
+  '/workbench',
+  '/track',
+  '/radar',
+  '/research',
+  '/workshop',
+  '/accounts',
+  '/jobs',
+  '/settings',
+] as const
 
 export const settingsHrefs = [
   '/settings/accounts',
   '/settings/models',
   '/settings/tikhub',
+  '/settings/backup',
   '/settings/cleanup',
   '/settings/usage',
 ] as const
@@ -78,9 +88,9 @@ export function normalizePath(hash: string): AppPath {
   if (isResearchVideoPath(path)) return path
   if (isWorkshopScriptPath(path)) return path
   if (isAccountVideoPath(path)) return path
+  if (path === '/settings') return '/settings/accounts'
   if (mainSet.has(path)) return path as MainHref
   if (settingsSet.has(path)) return path as SettingsHref
-  if (path === '/settings') return '/settings/accounts'
   return '/workbench'
 }
 

@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { navigate, type SettingsHref } from '../routes'
 import { settingsNav } from '../shell/nav'
 import { AccountPanel } from './AccountPanel'
+import { BackupPanel } from './BackupPanel'
 import { CleanupPanel } from './CleanupPanel'
 import { ModelPanel } from './ModelPanel'
 import { TikHubPanel } from './TikHubPanel'
@@ -24,6 +25,8 @@ function SettingsPanel({ href }: { href: SettingsHref }) {
       return <ModelPanel />
     case '/settings/tikhub':
       return <TikHubPanel />
+    case '/settings/backup':
+      return <BackupPanel />
     case '/settings/cleanup':
       return <CleanupPanel />
     case '/settings/usage':

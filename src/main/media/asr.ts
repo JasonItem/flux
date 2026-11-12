@@ -11,6 +11,7 @@ import {
   unlinkSync,
 } from 'node:fs'
 import { chmod } from 'node:fs/promises'
+import { arch } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
@@ -20,6 +21,14 @@ import { net } from 'electron'
 import extractZip from 'extract-zip'
 
 import { audioFilePath, isUsableMediaFile, whisperRootDir } from './paths'
+
+/** Official Windows zip; macOS prebuilds from bizenlabs (whisper.cpp has no mac CLI zips). */
+const WHISPER_WIN_ZIP =
+  'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip'
+const WHISPER_MAC_ARM64_ZIP =
+  'https://github.com/bizenlabs/whisper-cpp-macos-bin/releases/download/v1.8.2-2/whisper-cpp-v1.8.2-macos-arm64-metal.zip'
+const WHISPER_MAC_X64_ZIP =
+  'https://github.com/bizenlabs/whisper-cpp-macos-bin/releases/download/v1.8.2-2/whisper-cpp-v1.8.2-macos-x86_64-accelerate.zip'
 
 export interface TranscriptCue {
   startSec: number
@@ -35,6 +44,15 @@ export interface TranscriptResult {
 const MODEL_NAME = 'ggml-small.bin'
 const MODEL_URL =
   'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin'
+
+async function clearMacQuarantine(target: string): Promise<void> {
+  if (process.platform !== 'darwin') return
+  try {
+    await runCommand('xattr', ['-cr', target])
+  } catch {
+    // ignore — unsigned downloads may still run after chmod
+  }
+}
 
 function ffmpegBinary(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -162,20 +180,45 @@ function bundledWhisperCandidate(): string | null {
   return null
 }
 
+function macWhisperZipUrl(): string {
+  const cpu = arch()
+  if (cpu === 'arm64') return WHISPER_MAC_ARM64_ZIP
+  return WHISPER_MAC_X64_ZIP
+}
+
+function systemWhisperCandidates(): string[] {
+  if (process.platform === 'win32') return []
+  return [
+    '/opt/homebrew/bin/whisper-cli',
+    '/usr/local/bin/whisper-cli',
+    '/opt/homebrew/bin/whisper',
+    '/usr/local/bin/whisper',
+  ]
+}
+
 async function installWhisperBinary(
   onProgress?: (message: string, percent?: number) => void,
 ): Promise<string> {
   const cli = whisperCliPath()
-  if (existsSync(cli)) return cli
-
-  const bundled = bundledWhisperCandidate()
-  if (bundled) {
-    copyFileSync(bundled, cli)
-    if (process.platform !== 'win32') await chmod(cli, 0o755)
+  if (existsSync(cli)) {
+    await clearMacQuarantine(cli)
     return cli
   }
 
-  // Prefer system-installed whisper-cli if present
+  const bundled = bundledWhisperCandidate()
+  if (bundled) {
+    mkdirSync(dirname(cli), { recursive: true })
+    copyFileSync(bundled, cli)
+    if (process.platform !== 'win32') await chmod(cli, 0o755)
+    await clearMacQuarantine(cli)
+    return cli
+  }
+
+  for (const candidate of systemWhisperCandidates()) {
+    if (existsSync(candidate)) return candidate
+  }
+
+  // Prefer system-installed whisper-cli if present on PATH
   const which = process.platform === 'win32' ? 'where' : 'which'
   try {
     const { stdout } = await runCommand(which, [whisperCliName().replace('.exe', '')])
@@ -188,7 +231,7 @@ async function installWhisperBinary(
     // continue to download
   }
 
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
     throw new Error(
       '未找到 whisper-cli。请安装 whisper.cpp（例如 brew install whisper-cpp），或将二进制放入 resources/whisper/。',
     )
@@ -197,11 +240,8 @@ async function installWhisperBinary(
   onProgress?.('正在下载 Whisper 引擎…')
   const root = whisperRootDir()
   const zipPath = join(root, 'whisper-bin.zip')
-  await downloadFile(
-    'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip',
-    zipPath,
-    (p) => onProgress?.('正在下载 Whisper 引擎…', p),
-  )
+  const zipUrl = process.platform === 'darwin' ? macWhisperZipUrl() : WHISPER_WIN_ZIP
+  await downloadFile(zipUrl, zipPath, (p) => onProgress?.('正在下载 Whisper 引擎…', p))
   await extractZip(zipPath, { dir: root })
   const found =
     findFileRecursive(root, ['whisper-cli.exe', 'main.exe']) ||
@@ -210,6 +250,8 @@ async function installWhisperBinary(
   // Keep binaries in their extracted folder (Release/) so sibling DLLs resolve.
   const resolved = existsSync(found) ? found : cli
   if (process.platform !== 'win32') await chmod(resolved, 0o755)
+  await clearMacQuarantine(dirname(resolved))
+  await clearMacQuarantine(resolved)
   try {
     unlinkSync(zipPath)
   } catch {
@@ -281,6 +323,14 @@ function runCommand(
 
 async function extractWav(videoPath: string, wavPath: string): Promise<void> {
   const ffmpeg = ffmpegBinary()
+  if (process.platform !== 'win32') {
+    try {
+      await chmod(ffmpeg, 0o755)
+    } catch {
+      // ignore
+    }
+    await clearMacQuarantine(ffmpeg)
+  }
   if (existsSync(wavPath)) {
     try {
       unlinkSync(wavPath)

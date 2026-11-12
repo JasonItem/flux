@@ -4,6 +4,7 @@ export const CleanupChannels = {
   clearUsageLogs: 'cleanup:clear-usage-logs',
   clearAnalysisCache: 'cleanup:clear-analysis-cache',
   clearMediaCache: 'cleanup:clear-media-cache',
+  clearSqliteData: 'cleanup:clear-sqlite-data',
 } as const
 
 export type CleanupUsageKeepDays = 30 | 90
@@ -46,6 +47,7 @@ export interface CleanupStatus {
 export interface CleanupActionResult {
   freedBytes: number
   detail: string
+  relaunching?: boolean
 }
 
 export interface CleanupApi {
@@ -54,4 +56,6 @@ export interface CleanupApi {
   clearUsageLogs: (keepDays: CleanupUsageKeepDays) => Promise<CleanupActionResult>
   clearAnalysisCache: () => Promise<CleanupActionResult>
   clearMediaCache: () => Promise<CleanupActionResult>
+  /** 删除本地 SQLite 库并重启，恢复空白库 */
+  clearSqliteData: () => Promise<CleanupActionResult>
 }

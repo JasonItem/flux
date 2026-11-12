@@ -311,6 +311,37 @@ export function ResearchVideoPage({ videoId }: { videoId: string }) {
         detail?.status === 'ready' &&
         detail.dissectStatus === 'ready' &&
         Boolean(detail.fullTranscript)
+      const needsRedissect =
+        detail?.dissectStatus === 'error' || !detail?.fullTranscript?.trim()
+
+      if (needsRedissect) {
+        await getStudio().research.enqueueDissect(videoId, { force: true })
+        const next = await getStudio().research.getVideo(videoId)
+        setDetail(next)
+        const jobs = await getStudio().jobs.list()
+        const mine = jobs.find(
+          (job) =>
+            job.dedupeKey === researchDissectDedupeKey(videoId) &&
+            (job.status === 'queued' || job.status === 'running'),
+        )
+        setProgress(
+          mine
+            ? {
+                videoId,
+                phase: 'pending',
+                message: mine.message || '已重新加入拆解队列',
+                percent: mine.percent ?? undefined,
+              }
+            : {
+                videoId,
+                phase: 'pending',
+                message: '已重新加入拆解队列',
+              },
+        )
+        toast.success({ title: '已重新加入拆解', description: '完成后会自动打开完整详情' })
+        return
+      }
+
       const next = await getStudio().research.refreshVideo(videoId)
       setDetail(next)
       if (prevReady || (next.status === 'ready' && next.dissectStatus === 'ready')) {
@@ -484,11 +515,18 @@ export function ResearchVideoPage({ videoId }: { videoId: string }) {
     }
   }
 
+  const dissectReady = Boolean(detail?.fullTranscript?.trim()) && detail?.dissectStatus === 'ready'
+  const dissectFailed = detail?.dissectStatus === 'error'
+  const waitingForDissect = Boolean(detail) && !dissectReady && !dissectFailed
+  const gateOpen = loading || !detail || waitingForDissect
+
   const loadingMessage = progress?.message
     ? progress.message
-    : progress
-      ? '后台拆解进行中，完成后会自动更新本页'
-      : '正在读取本地样本详情…'
+    : waitingForDissect
+      ? '已加入拆解队列，完成后才会打开完整详情'
+      : progress
+        ? '后台拆解进行中，完成后会自动更新本页'
+        : '正在读取本地样本详情…'
 
   return (
     <div className="page">
@@ -528,12 +566,18 @@ export function ResearchVideoPage({ videoId }: { videoId: string }) {
         </Flexbox>
       </div>
 
-      {loading || !detail ? (
+      {gateOpen ? (
         <div className="page-empty">
-          {loading ? (
+          {loading || waitingForDissect ? (
             <div className="research-loading">
               <RingProgress percent={progress?.percent ?? null} size={88} />
-              <Text weight={600}>{progress ? phaseLabel(progress.phase) : '正在打开样本'}</Text>
+              <Text weight={600}>
+                {progress
+                  ? phaseLabel(progress.phase)
+                  : waitingForDissect
+                    ? '排队拆解中'
+                    : '正在打开样本'}
+              </Text>
               <Text type="secondary">{loadingMessage}</Text>
             </div>
           ) : (
@@ -548,20 +592,25 @@ export function ResearchVideoPage({ videoId }: { videoId: string }) {
             />
           )}
         </div>
+      ) : dissectFailed && detail ? (
+        <div className="page-empty">
+          <Empty
+            description={detail.dissectError || '下载、转写或分析过程出错，可重试拆解。'}
+            title="拆解失败"
+            action={
+              <Flexbox gap={8} horizontal>
+                <Button type="primary" loading={refreshing} onClick={() => void refresh()}>
+                  重新拆解
+                </Button>
+                <Button type="text" onClick={() => navigate('/research')}>
+                  返回列表
+                </Button>
+              </Flexbox>
+            }
+          />
+        </div>
       ) : (
         <div className="page-stack">
-          {progress ? (
-            <div className="research-job-banner">
-              <RingProgress percent={progress.percent ?? null} size={56} stroke={5} />
-              <Flexbox gap={2} style={{ minWidth: 0, flex: 1 }}>
-                <Text weight={600}>后台任务 · {phaseLabel(progress.phase)}</Text>
-                <Text type="secondary">{loadingMessage || progress.message}</Text>
-              </Flexbox>
-            </div>
-          ) : null}
-          {detail.dissectStatus === 'error' && detail.dissectError && !isLocalPlayUrl(playUrl) ? (
-            <Text type="secondary">拆解失败：{detail.dissectError}</Text>
-          ) : null}
 
           <div className="research-editor">
             <div className="research-editor__stage">
